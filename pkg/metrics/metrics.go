@@ -21,13 +21,30 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+var subsystem = "acceleration_service_core"
+
+var Conversion ConversionMetric
+
 type OpWrapper struct {
 	OpDuration   *prometheus.HistogramVec
 	OpTotal      *prometheus.CounterVec
 	OpErrorTotal *prometheus.CounterVec
 }
 
-var subsystem = "acceleration_service_core"
+type ConversionMetric struct {
+	*OpWrapper
+}
+
+func init() {
+	Conversion = ConversionMetric{
+		OpWrapper: NewOpWrapper("conversions", []string{"op"}),
+	}
+	prometheus.MustRegister(
+		Conversion.OpDuration,
+		Conversion.OpTotal,
+		Conversion.OpErrorTotal,
+	)
+}
 
 func NewOpWrapper(scope string, labelNames []string) *OpWrapper {
 	return &OpWrapper{

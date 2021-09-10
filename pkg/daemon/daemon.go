@@ -15,26 +15,29 @@
 package daemon
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/handler"
 	"github.com/goharbor/acceleration-service/pkg/router"
 	"github.com/goharbor/acceleration-service/pkg/server"
 )
 
+// Daemon exports an HTTP server for image conversion service.
 type Daemon struct {
 	server server.Server
 }
 
 func NewDaemon(cfg *config.Config) (*Daemon, error) {
-	apiHandler, err := handler.NewAPIHandler(cfg)
+	handler, err := handler.NewLocalHandler(cfg)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "create api handler")
 	}
 
-	router := router.NewLocalRouter(apiHandler)
-	srv, err := server.NewHttpServer(&cfg.Server, router)
+	router := router.NewLocalRouter(handler)
+	srv, err := server.NewHTTPServer(&cfg.Server, &cfg.Metric, router)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "create http server")
 	}
 
 	return &Daemon{

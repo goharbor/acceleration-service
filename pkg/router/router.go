@@ -39,7 +39,7 @@ func NewLocalRouter(handler handler.Handler) Router {
 }
 
 func (router *LocalRouter) Register(server *echo.Echo) error {
-	server.PUT("/ping", router.Ping)
+	server.POST("/api/v1/conversions", router.Convert)
 
 	// Any unexpected endpoint will return an error.
 	server.Any("*", func(ctx echo.Context) error {

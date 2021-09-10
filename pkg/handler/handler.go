@@ -15,33 +15,59 @@
 package handler
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/pkg/errors"
 
 	"github.com/goharbor/acceleration-service/pkg/config"
+	"github.com/goharbor/acceleration-service/pkg/converter"
 )
 
-var (
-	ErrIllegalParameter = errors.New("ERR_ILLEGAL_PARAMETER")
-	ErrUnauthorized     = errors.New("ERR_UNAUTHORIZED")
-	ErrNotHealthy       = errors.New("ERR_NOT_HEALTHY")
-)
-
+// Handler for handling HTTP requests.
 type Handler interface {
-	Ping() error
+	// Auth checks if the auth header in webhook request for
+	// the specified host is correct.
+	Auth(ctx context.Context, host string, authHeader string) error
+	// Convert converts source image to target image by specifying
+	// source image reference, the conversion is asynchronous, and
+	// if the sync option is specified, the HTTP request will be
+	// blocked until the conversion is complete.
+	Convert(ctx context.Context, ref string, sync bool) error
 }
 
-type ApiHandler struct {
-	config *config.Config
+type LocalHandler struct {
+	cfg *config.Config
+	cvt converter.Converter
 }
 
-func NewAPIHandler(cfg *config.Config) (*ApiHandler, error) {
-	h := &ApiHandler{
-		config: cfg,
+func NewLocalHandler(cfg *config.Config) (*LocalHandler, error) {
+	cvt, err := converter.NewLocalConverter(cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "create converter")
 	}
 
-	return h, nil
+	handler := &LocalHandler{
+		cfg: cfg,
+		cvt: cvt,
+	}
+
+	return handler, nil
 }
 
-func (handler *ApiHandler) Ping() error {
+func (handler *LocalHandler) Auth(ctx context.Context, host string, authHeader string) error {
+	if authHeader != "" {
+		source, ok := handler.cfg.Provider.Source[host]
+		if !ok {
+			return fmt.Errorf("not found config for host %s", host)
+		}
+		if authHeader != source.Webhook.AuthHeader {
+			return fmt.Errorf("unmatched auth header for host %s", host)
+		}
+	}
 	return nil
+}
+
+func (handler *LocalHandler) Convert(ctx context.Context, ref string, sync bool) error {
+	return handler.cvt.Dispatch(ctx, ref, sync)
 }
