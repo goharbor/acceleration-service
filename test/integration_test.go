@@ -36,7 +36,7 @@ func (suite *IntegrationTestSuite) cleanUp() {
 func (suite *IntegrationTestSuite) SetupSuite() {
 	suite.cleanUp()
 
-	cfg, err := config.Parse("../misc/config/config.yaml.tmpl")
+	cfg, err := config.Parse("../misc/config/config.yaml.nydus.tmpl")
 	suite.Require().NoError(err)
 	suite.startDaemon(cfg)
 

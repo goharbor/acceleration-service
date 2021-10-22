@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/snapshots"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -39,6 +40,8 @@ var logger = logrus.WithField("module", "content")
 // store for image conversion.
 type Provider interface {
 	// Pull pulls source image from remote registry by specified reference.
+	// This pulls all platforms of the image but Image() returns containerd.Image for
+	// the default platoform.
 	Pull(ctx context.Context, ref string) error
 	// Push pushes target image to remote registry by specified reference,
 	// the desc parameter represents the manifest of targe image.
@@ -92,8 +95,8 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 	}
 
 	opts := []containerd.RemoteOpt{
-		// TODO: support multi-platform source images.
 		// TODO: sets max concurrent downloaded layer limit by containerd.WithMaxConcurrentDownloads.
+		containerd.WithPlatformMatcher(platforms.All),
 		containerd.WithImageHandler(images.HandlerFunc(
 			func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 				if images.IsLayerType(desc.MediaType) {
@@ -102,18 +105,18 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 				return nil, nil
 			},
 		)),
-		containerd.WithPullUnpack,
 		containerd.WithResolver(resolver),
 	}
 
 	// Pull the source image from remote registry.
-	image, err := pvd.client.Pull(ctx, ref, opts...)
+	image, err := pvd.client.Fetch(ctx, ref, opts...)
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}
-	pvd.image = image
+	pvd.image = containerd.NewImageWithPlatform(pvd.client, image, platforms.DefaultStrict())
 
-	return nil
+	// Unpack the image (default platform only)
+	return pvd.image.Unpack(ctx, "")
 }
 
 func (pvd *LocalProvider) Write(ctx context.Context, desc ocispec.Descriptor, reader io.Reader, labels map[string]string) error {

@@ -42,8 +42,16 @@ $ printf '<robot-name>:<robot-secret>' | base64
 
 1. Copy template config file
 
+nydus:
+
 ``` shell
-$ cp misc/config/config.yaml.tmpl misc/config/config.yaml
+$ cp misc/config/config.yaml.nydus.tmpl misc/config/config.yaml
+```
+
+estargz:
+
+``` shell
+$ cp misc/config/config.yaml.estargz.tmpl misc/config/config.yaml
 ```
 
 2. Edit config file
