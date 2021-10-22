@@ -23,6 +23,10 @@ import (
 
 type Config struct {
 	Server ServerConfig `yaml:"server"`
+	Metric MetricConfig `yaml:"metric"`
+
+	Provider  ProviderConfig  `yaml:"provider"`
+	Converter ConverterConfig `yaml:"converter"`
 }
 
 type ServerConfig struct {
@@ -32,15 +36,54 @@ type ServerConfig struct {
 	Port string `yaml:"port"`
 }
 
+type MetricConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type ProviderConfig struct {
+	Source     map[string]SourceConfig `yaml:"source"`
+	Containerd ContainerdConfig        `yaml:"containerd"`
+}
+
+type Webhook struct {
+	AuthHeader string `yaml:"auth_header"`
+}
+
+type SourceConfig struct {
+	Auth     string  `yaml:"auth"`
+	Insecure bool    `yaml:"insecure"`
+	Webhook  Webhook `yaml:"webhook"`
+}
+
+type ContainerdConfig struct {
+	Address     string `yaml:"address"`
+	Snapshotter string `yaml:"snapshotter"`
+}
+
+type ConversionRule struct {
+	TagSuffix string `yaml:"tag_suffix"`
+}
+
+type ConverterConfig struct {
+	Worker int              `yaml:"worker"`
+	Driver DriverConfig     `yaml:"driver"`
+	Rules  []ConversionRule `yaml:"rules"`
+}
+
+type DriverConfig struct {
+	Type   string            `yaml:"type"`
+	Config map[string]string `yaml:"config"`
+}
+
 func Parse(configPath string) (*Config, error) {
 	bytes, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to load config: %s", configPath)
+		return nil, errors.Wrapf(err, "load config: %s", configPath)
 	}
 
 	var config Config
 	if err := yaml.Unmarshal(bytes, &config); err != nil {
-		return nil, errors.Wrapf(err, "failed to parse config: %s", configPath)
+		return nil, errors.Wrapf(err, "parse config: %s", configPath)
 	}
 
 	return &config, nil

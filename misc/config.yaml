@@ -1,4 +1,0 @@
-server:
-  name: API
-  host: 0.0.0.0
-  port: 2077

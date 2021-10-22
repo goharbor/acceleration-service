@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -31,7 +32,8 @@ var versionBuildTime string
 
 func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp: true,
+		FullTimestamp:   true,
+		TimestampFormat: time.RFC3339Nano,
 	})
 
 	version := fmt.Sprintf("%s.%s", versionGitCommit, versionBuildTime)
@@ -52,11 +54,11 @@ func main() {
 
 			d, err := daemon.NewDaemon(cfg)
 			if err != nil {
-				return errors.Wrapf(err, "create daemon")
+				return errors.Wrap(err, "create daemon")
 			}
 
 			if err := d.Run(); err != nil {
-				return errors.Wrapf(err, "run daemon")
+				return errors.Wrap(err, "run daemon")
 			}
 
 			return nil

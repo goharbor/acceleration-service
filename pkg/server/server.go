@@ -27,37 +27,43 @@ import (
 	"github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/goharbor/acceleration-service/pkg/config"
-	"github.com/goharbor/acceleration-service/pkg/handler"
+	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/router"
 	"github.com/goharbor/acceleration-service/pkg/server/util"
 )
 
 const shutdownTimeout = time.Second * 10
 
+var logger = logrus.WithField("module", "api")
+
 type Server interface {
 	Run() error
 }
 
-type HttpServer struct {
+type HTTPServer struct {
 	addr   string
 	server *echo.Echo
 }
 
-func NewHttpServer(cfg *config.ServerConfig, router router.Router) (*HttpServer, error) {
+func NewHTTPServer(cfg *config.ServerConfig, metricCfg *config.MetricConfig, router router.Router) (*HTTPServer, error) {
 	server := echo.New()
 
 	server.HideBanner = true
 	server.HidePort = true
 
+	// Enforce all meddlewares to use our logger.
+	server.Logger.(*log.Logger).SetOutput(logger.Writer())
+
 	// Handle internal error in API handler that is not visible to user.
 	server.HTTPErrorHandler = func(err error, ctx echo.Context) {
 		if errors.Is(err, echo.ErrUnauthorized) {
 			util.ReplyError(
-				ctx, http.StatusUnauthorized, handler.ErrUnauthorized,
+				ctx, http.StatusUnauthorized, errdefs.ErrUnauthorized,
 				"Authentication failed, please make sure the `Authorization` header is valid",
 			)
 			return
@@ -69,13 +75,28 @@ func NewHttpServer(cfg *config.ServerConfig, router router.Router) (*HttpServer,
 
 	// Add logger middleware for HTTP request & response records.
 	server.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-		Format: fmt.Sprintf("[%s] ${time_rfc3339} ${method} ${uri} ${status} ${latency_human}\n", cfg.Name),
+		Format: "${method} ${uri} ${status} ${latency_human} ${bytes_in}>${bytes_out}bytes ${remote_ip}\n",
+		Output: logger.Writer(),
+		Skipper: func(ctx echo.Context) bool {
+			// So many /metrics endpoint requests, so we'd better to ignore the logs.
+			return strings.HasPrefix(ctx.Path(), "/metrics")
+		},
 	}))
 
-	// Export the metrics of HTTP request/response to `/metrics` endpoint.
-	// See https://echo.labstack.com/middleware/prometheus/
-	metric := prometheus.NewPrometheus(fmt.Sprintf("acceleration_service_%s", strings.ToLower(cfg.Name)), nil)
-	metric.Use(server)
+	// If any panic occurs in handler, recovery is necessary and an internal
+	// error should be returned to client instead of exiting the process.
+	server.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		// Will affect performance if set this option to false.
+		DisableStackAll: true,
+		LogLevel:        log.ERROR,
+	}))
+
+	if metricCfg.Enabled {
+		// Export the metrics of HTTP request/response to `/metrics` endpoint.
+		// See https://echo.labstack.com/middleware/prometheus/
+		metric := prometheus.NewPrometheus(fmt.Sprintf("acceleration_service_%s", strings.ToLower(cfg.Name)), nil)
+		metric.Use(server)
+	}
 
 	// Setup UDS if configured
 	var addr string
@@ -120,13 +141,13 @@ func NewHttpServer(cfg *config.ServerConfig, router router.Router) (*HttpServer,
 
 	logrus.Infof("[%s] HTTP server started on %s%s", cfg.Name, cfg.Uds, addr)
 
-	return &HttpServer{
+	return &HTTPServer{
 		addr:   addr,
 		server: server,
 	}, nil
 }
 
-func (srv *HttpServer) Run() error {
+func (srv *HTTPServer) Run() error {
 	if err := srv.server.Start(srv.addr); err != nil {
 		if err != http.ErrServerClosed {
 			return errors.Wrapf(err, "start http server")
