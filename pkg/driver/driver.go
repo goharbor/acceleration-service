@@ -22,6 +22,7 @@ import (
 
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/content"
+	"github.com/goharbor/acceleration-service/pkg/driver/estargz"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus"
 )
 
@@ -40,6 +41,8 @@ func NewLocalDriver(cfg *config.DriverConfig) (Driver, error) {
 	switch cfg.Type {
 	case "nydus":
 		return nydus.New(cfg.Config)
+	case "estargz":
+		return estargz.New(cfg.Config)
 	default:
 		return nil, fmt.Errorf("unsupported driver %s", cfg.Type)
 	}

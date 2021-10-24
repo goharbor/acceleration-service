@@ -33,14 +33,10 @@ converter:
   # number of worker for executing conversion task
   worker: 5
   driver:
-    # accelerator driver type: `nydus`
-    # estargz driver implementation is in progress
-    type: nydus
+    # accelerator driver type: `estargz`
+    type: estargz
     config:
-      work_dir: /tmp
-      # `nydus-image` binary path, download it from:
-      # https://github.com/imeoer/image-service/releases/download/v1.0.0/nydus-image
-      builder: nydus-image
+      docker2oci: true
   rules:
     # add suffix to tag of source image reference as target image reference
-    - tag_suffix: -converted
+    - tag_suffix: -esgz
