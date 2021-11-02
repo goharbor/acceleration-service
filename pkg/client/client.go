@@ -1,24 +1,34 @@
-package test
+package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/goharbor/acceleration-service/pkg/server/util"
+	"github.com/pkg/errors"
 )
 
 type Client struct {
 	addr   string
-	suite  *suite.Suite
 	client *http.Client
 }
 
-func NewClient(suite *suite.Suite, addr string) *Client {
+func marshal(payload interface{}) (io.Reader, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal json object")
+	}
+
+	return bytes.NewReader(data), nil
+}
+
+func NewClient(addr string) *Client {
 	transport := &http.Transport{
 		MaxIdleConns:          10,
 		IdleConnTimeout:       10 * time.Second,
@@ -33,32 +43,44 @@ func NewClient(suite *suite.Suite, addr string) *Client {
 	}
 
 	client := &http.Client{
-		Timeout:   2 * time.Minute,
+		// Since an image conversion task may take a long time,
+		// the timeout need be set to a larger value here.
+		Timeout:   1 * time.Hour,
 		Transport: transport,
 	}
 
 	return &Client{
 		addr:   addr,
-		suite:  suite,
 		client: client,
 	}
 }
 
 func (client *Client) Request(method, path string, body io.Reader, header map[string]string) (*http.Response, error) {
 	req, err := http.NewRequest(method, fmt.Sprintf("http://%s%s", client.addr, path), body)
-	client.suite.NoError(err)
+	if err != nil {
+		return nil, errors.Wrap(err, "create http request")
+	}
 
+	req.Header.Add("Content-Type", "application/json")
 	for k, v := range header {
 		req.Header.Add(k, v)
 	}
 
 	resp, err := client.client.Do(req)
-	client.suite.NoError(err)
+	if err != nil {
+		return nil, errors.Wrap(err, "do http request")
+	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
-		errMsg, err := ioutil.ReadAll(resp.Body)
-		client.suite.NoError(err)
-		client.suite.T().Log(string(errMsg))
+		defer resp.Body.Close()
+
+		decoder := json.NewDecoder(resp.Body)
+		var errResp util.ErrorResp
+		if err := decoder.Decode(&errResp); err != nil {
+			return nil, errors.Wrap(err, "decode error response")
+		}
+
+		return nil, fmt.Errorf("service response: %s", errResp.Message)
 	}
 
 	return resp, nil

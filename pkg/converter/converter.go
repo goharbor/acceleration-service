@@ -27,6 +27,7 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/driver"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/metrics"
+	"github.com/goharbor/acceleration-service/pkg/task"
 )
 
 var logger = logrus.WithField("module", "converter")
@@ -130,15 +131,23 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 }
 
 func (cvt *LocalConverter) Dispatch(ctx context.Context, ref string, sync bool) error {
+	taskID := task.Manager.Create(ref)
+
 	if sync {
 		// FIXME: The synchronous conversion task should also be
 		// executed in a limited worker queue.
-		return cvt.Convert(context.Background(), ref)
+		return metrics.Conversion.OpWrap(func() error {
+			err := cvt.Convert(ctx, ref)
+			task.Manager.Finish(taskID, err)
+			return err
+		}, "convert")
 	}
 
 	cvt.worker.Dispatch(func() error {
 		return metrics.Conversion.OpWrap(func() error {
-			return cvt.Convert(context.Background(), ref)
+			err := cvt.Convert(context.Background(), ref)
+			task.Manager.Finish(taskID, err)
+			return err
 		}, "convert")
 	})
 

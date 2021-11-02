@@ -15,4 +15,5 @@
 # vendor/
 
 /misc/config/config.yaml
-/acceleration-service
+/acceld
+/accelctl

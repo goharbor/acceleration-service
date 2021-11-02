@@ -19,10 +19,13 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/sirupsen/logrus"
 
 	"github.com/goharbor/acceleration-service/pkg/handler"
 	"github.com/goharbor/acceleration-service/pkg/server/util"
 )
+
+var logger = logrus.WithField("module", "api")
 
 type Router interface {
 	Register(server *echo.Echo) error
@@ -39,7 +42,8 @@ func NewLocalRouter(handler handler.Handler) Router {
 }
 
 func (router *LocalRouter) Register(server *echo.Echo) error {
-	server.POST("/api/v1/conversions", router.Convert)
+	server.POST("/api/v1/conversions", router.CreateTask)
+	server.GET("/api/v1/conversions", router.ListTask)
 
 	// Any unexpected endpoint will return an error.
 	server.Any("*", func(ctx echo.Context) error {

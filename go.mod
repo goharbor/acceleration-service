@@ -8,6 +8,7 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.9.0
 	github.com/docker/cli v20.10.9+incompatible
 	github.com/goharbor/harbor/src v0.0.0-20211021012518-bc6a7f65a6fa
+	github.com/google/uuid v1.2.0
 	github.com/labstack/echo-contrib v0.11.0
 	github.com/labstack/echo/v4 v4.6.1
 	github.com/labstack/gommon v0.3.0
