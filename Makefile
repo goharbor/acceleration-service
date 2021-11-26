@@ -2,9 +2,10 @@ GIT_COMMIT := $(shell git rev-list -1 HEAD)
 BUILD_TIME := $(shell date -u +%Y%m%d.%H%M)
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
-# Build binary to ./acceleration-service
+# Build binary to ./
 default: check
-	go build -ldflags '-X main.versionGitCommit=${GIT_COMMIT} -X main.versionBuildTime=${BUILD_TIME}' -gcflags=all="-N -l" ./cmd/acceleration-service
+	go build -ldflags '-X main.versionGitCommit=${GIT_COMMIT} -X main.versionBuildTime=${BUILD_TIME}' -gcflags=all="-N -l" ./cmd/acceld
+	go build -ldflags '-X main.versionGitCommit=${GIT_COMMIT} -X main.versionBuildTime=${BUILD_TIME}' -gcflags=all="-N -l" ./cmd/accelctl
 
 install-check-tools:
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.42.1

@@ -7,12 +7,13 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/goharbor/acceleration-service/pkg/client"
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/daemon"
 )
 
 type IntegrationTestSuite struct {
-	client *Client
+	client *client.Client
 	suite.Suite
 }
 
@@ -26,8 +27,8 @@ func (suite *IntegrationTestSuite) startDaemon(cfg *config.Config) {
 	}()
 }
 
-func (suite *IntegrationTestSuite) newClient(cfg *config.Config) *Client {
-	return NewClient(&suite.Suite, fmt.Sprintf("127.0.0.1:%s", cfg.Server.Port))
+func (suite *IntegrationTestSuite) newClient(cfg *config.Config) *client.Client {
+	return client.NewClient(fmt.Sprintf("127.0.0.1:%s", cfg.Server.Port))
 }
 
 func (suite *IntegrationTestSuite) cleanUp() {

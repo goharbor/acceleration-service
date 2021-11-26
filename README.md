@@ -72,15 +72,24 @@ root        929  0.5  0.5 2222284 22368 ?       Ssl  Sep16   4:27 /usr/local/bin
 2. Boot daemon to serve webhook request in PUSH_ARTIFACT event
 
 ``` shell
-$ ./acceleration-service --config ./misc/config/config.yaml
+$ ./acceld --config ./misc/config/config.yaml
 ```
 
-### Test with pushing image
+### Test image conversion
 
-1. Push a test image to Harbor
+1. Trigger image conversion
+
+We can either push an image to Harbor:
 
 ``` shell
 $ docker push <harbor-service-address>/library/nginx:latest
+```
+
+Or convert an existing image manually using the `accelctl` CLI tool:
+
+``` shell
+$ ./accelctl task create <harbor-service-address>/library/nginx:latest
+$ ./accelctl list
 ```
 
 2. Got converted image

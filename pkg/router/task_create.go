@@ -17,29 +17,20 @@ package router
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/goharbor/harbor/src/controller/event"
 	"github.com/goharbor/harbor/src/pkg/notifier/model"
 	"github.com/labstack/echo/v4"
-	"github.com/sirupsen/logrus"
 
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/server/util"
 )
 
-var logger = logrus.WithField("module", "api")
-
-type Data struct {
-	LogLevel string `json:"log_level"`
-}
-
-type ConvertRequest struct {
-	Ref  string `query:"ref"`
-	Sync bool   `query:"sync"`
-}
-
-func (r *LocalRouter) Convert(ctx echo.Context) error {
+func (r *LocalRouter) CreateTask(ctx echo.Context) error {
 	logger.Infof("received webhook request from %s", ctx.Request().RemoteAddr)
+
+	sync, _ := strconv.ParseBool(ctx.QueryParam("sync"))
 
 	payload := new(model.Payload)
 	if err := ctx.Bind(payload); err != nil {
@@ -76,7 +67,7 @@ func (r *LocalRouter) Convert(ctx echo.Context) error {
 	}
 
 	for _, res := range payload.EventData.Resources {
-		if err := r.handler.Convert(ctx.Request().Context(), res.ResourceURL, false); err != nil {
+		if err := r.handler.Convert(ctx.Request().Context(), res.ResourceURL, sync); err != nil {
 			return util.ReplyError(
 				ctx, http.StatusInternalServerError, errdefs.ErrConvertFailed,
 				err.Error(),

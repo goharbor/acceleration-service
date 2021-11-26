@@ -40,7 +40,7 @@ func main() {
 	logrus.Infof("Version: %s\n", version)
 
 	app := &cli.App{
-		Name:    "acceleration-service",
+		Name:    "acceld",
 		Usage:   "Provides a general service to support image acceleration based on kinds of accelerator like Nydus and eStargz etc.",
 		Version: version,
 		Flags: []cli.Flag{
