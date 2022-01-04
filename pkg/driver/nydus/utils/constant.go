@@ -12,21 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package export
+package utils
 
 const (
 	ManifestOSFeatureNydus   = "nydus.remoteimage.v1"
 	MediaTypeNydusBlob       = "application/vnd.oci.image.layer.nydus.blob.v1"
 	BootstrapFileNameInLayer = "image/image.boot"
 
-	ManifestNydusCache = "containerd.io/snapshot/nydus-cache"
-
-	LayerAnnotationNydusBlob          = "containerd.io/snapshot/nydus-blob"
-	LayerAnnotationNydusBlobDigest    = "containerd.io/snapshot/nydus-blob-digest"
-	LayerAnnotationNydusBlobSize      = "containerd.io/snapshot/nydus-blob-size"
-	LayerAnnotationNydusBlobIDs       = "containerd.io/snapshot/nydus-blob-ids"
-	LayerAnnotationNydusBootstrap     = "containerd.io/snapshot/nydus-bootstrap"
-	LayerAnnotationNydusSourceChainID = "containerd.io/snapshot/nydus-source-chainid"
+	LayerAnnotationNydusBlob      = "containerd.io/snapshot/nydus-blob"
+	LayerAnnotationNydusBootstrap = "containerd.io/snapshot/nydus-bootstrap"
 
 	LayerAnnotationUncompressed = "containerd.io/uncompressed"
 )
+
+var NydusAnnotations = []string{LayerAnnotationNydusBlob, LayerAnnotationNydusBootstrap}

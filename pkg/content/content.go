@@ -17,7 +17,6 @@ package content
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 
 	"github.com/containerd/containerd"
@@ -117,22 +116,6 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 
 	// Unpack the image (default platform only)
 	return pvd.image.Unpack(ctx, "")
-}
-
-func (pvd *LocalProvider) Write(ctx context.Context, desc ocispec.Descriptor, reader io.Reader, labels map[string]string) error {
-	digest := desc.Digest.String()
-
-	if err := content.WriteBlob(
-		ctx, pvd.client.ContentStore(), digest, reader, desc, content.WithLabels(labels),
-	); err != nil {
-		return errors.Wrapf(err, "write blob %s", digest)
-	}
-
-	return nil
-}
-
-func (pvd *LocalProvider) Read(ctx context.Context, desc ocispec.Descriptor) ([]byte, error) {
-	return content.ReadBlob(ctx, pvd.client.ContentStore(), desc)
 }
 
 func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref string) error {
