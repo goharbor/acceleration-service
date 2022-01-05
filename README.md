@@ -65,7 +65,7 @@ Following comments in `misc/config/config.yaml`, ensure base64 encoded auth stri
 Acceleration service depends on containerd service to manage image content, containerd service is used default if you have installed the latest docker.
 
 ``` shell
-$ ps aux | grep contained
+$ ps aux | grep containerd
 root        929  0.5  0.5 2222284 22368 ?       Ssl  Sep16   4:27 /usr/local/bin/containerd
 ```
 
@@ -89,7 +89,7 @@ Or convert an existing image manually using the `accelctl` CLI tool:
 
 ``` shell
 $ ./accelctl task create <harbor-service-address>/library/nginx:latest
-$ ./accelctl list
+$ ./accelctl task list
 ```
 
 2. Got converted image
@@ -104,7 +104,7 @@ INFO[2021-09-17T05:44:01.826490232Z] POST /api/v1/conversions 200 552.695µs 392
 INFO[2021-09-17T05:44:01.830893103Z] pulling image 192.168.1.1/library/nginx:latest  module=converter
 INFO[2021-09-17T05:44:01.916123236Z] pulled image 192.168.1.1/library/nginx:latest  module=converter
 INFO[2021-09-17T05:44:01.916175337Z] converting image 192.168.1.1/library/nginx:latest  module=converter
-INFO[2021-09-17T05:44:04.317992888Z] converted image 192.168.1.1/library/nginx:latest-converted  module=converter
+INFO[2021-09-17T05:44:04.317992888Z] converted image 192.168.1.1/library/nginx:latest-nydus  module=converter
 ```
 
-After that, we will find converted artifact in Harbor interface with name `<harbor-service-address>/nginx:latest-converted`.
+After that, we will find converted artifact in Harbor interface with name `<harbor-service-address>/nginx:latest-nydus`.
