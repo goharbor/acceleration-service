@@ -137,7 +137,7 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildL
 	return output, nil
 }
 
-func (p *Packer) Build(ctx context.Context, layers []SourceLayer) ([]Descriptor, error) {
+func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error) {
 	var diffSkip *int
 	var parent *BuildLayer
 
@@ -176,8 +176,8 @@ func (p *Packer) Build(ctx context.Context, layers []SourceLayer) ([]Descriptor,
 		}
 
 		buildLayer := BuildLayer{
-			SourceLayer: layer,
-			parent:      parent,
+			Layer:  layer,
+			parent: parent,
 		}
 		parent = &buildLayer
 

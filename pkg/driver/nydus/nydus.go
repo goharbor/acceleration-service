@@ -27,12 +27,14 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/goharbor/acceleration-service/pkg/content"
+	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/export"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/packer"
 )
 
 type Driver struct {
-	packer *packer.Packer
+	backend backend.Backend
+	packer  *packer.Packer
 }
 
 func New(cfg map[string]string) (*Driver, error) {
@@ -46,13 +48,25 @@ func New(cfg map[string]string) (*Driver, error) {
 		builderPath = "nydus-image"
 	}
 
+	var err error
+	var _backend backend.Backend
+	backendType := cfg["backend_type"]
+	backendConfig := cfg["backend_config"]
+	if backendType != "" && backendConfig != "" {
+		_backend, err = backend.NewBackend(backendType, []byte(backendConfig))
+		if err != nil {
+			return nil, errors.Wrap(err, "create blob backend")
+		}
+	}
+
 	p, err := packer.New(workDir, builderPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "create nydus packer")
 	}
 
 	return &Driver{
-		packer: p,
+		packer:  p,
+		backend: _backend,
 	}, nil
 }
 
@@ -67,21 +81,22 @@ func (nydus *Driver) Convert(ctx context.Context, content content.Provider) (*oc
 		return nil, errors.Wrap(err, "get image manifest from containerd")
 	}
 
-	sourceLayers := []packer.SourceLayer{}
+	layers := []packer.Layer{}
 
 	var chain []digest.Digest
 	for idx := range sourceManifest.Layers {
 		chain = append(chain, diffIDs[idx])
 		upper := identity.ChainID(chain).String()
 
-		sourceLayers = append(sourceLayers, &buildLayer{
+		layers = append(layers, &buildLayer{
 			chainID: upper,
 			sn:      content.Snapshotter(),
 			cs:      content.ContentStore(),
+			backend: nydus.backend,
 		})
 	}
 
-	nydusLayers, err := nydus.packer.Build(ctx, sourceLayers)
+	nydusLayers, err := nydus.packer.Build(ctx, layers)
 	if err != nil {
 		return nil, errors.Wrap(err, "build nydus image")
 	}

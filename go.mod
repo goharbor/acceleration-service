@@ -3,6 +3,7 @@ module github.com/goharbor/acceleration-service
 go 1.16
 
 require (
+	github.com/aliyun/aliyun-oss-go-sdk v2.2.0+incompatible // indirect
 	github.com/containerd/containerd v1.5.7
 	github.com/containerd/stargz-snapshotter v0.9.0
 	github.com/containerd/stargz-snapshotter/estargz v0.9.0
@@ -20,5 +21,6 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )

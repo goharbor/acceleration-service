@@ -53,18 +53,20 @@ func Export(ctx context.Context, content content.Provider, layers []packer.Descr
 	descs := []ocispec.Descriptor{}
 	for idx := range layers {
 		layer := layers[idx]
-		if layer.Blob == nil {
-			continue
-		}
 
-		layerDiffID := digest.Digest(layer.Blob.Annotations[utils.LayerAnnotationUncompressed])
-		nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
-		descs = append(descs, *layer.Blob)
+		// Append blob layer.
+		if layer.Blob != nil {
+			layerDiffID := digest.Digest(layer.Blob.Annotations[utils.LayerAnnotationUncompressed])
+			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+			delete(layer.Blob.Annotations, utils.LayerAnnotationUncompressed)
+			descs = append(descs, *layer.Blob)
+		}
 
 		// Append bootstrap layer.
 		if idx == len(layers)-1 {
 			layerDiffID := digest.Digest(layer.Bootstrap.Annotations[utils.LayerAnnotationUncompressed])
 			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+			delete(layer.Bootstrap.Annotations, utils.LayerAnnotationUncompressed)
 			descs = append(descs, layer.Bootstrap)
 		}
 	}

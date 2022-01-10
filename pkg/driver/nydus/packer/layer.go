@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 )
 
@@ -36,7 +37,7 @@ const (
 	CompressionTypeBootstrap = "nydus-bootstrap"
 )
 
-type SourceLayer interface {
+type Layer interface {
 	// ContentStore provides containerd content store for nydus layer export.
 	ContentStore(ctx context.Context) content.Store
 
@@ -54,10 +55,13 @@ type SourceLayer interface {
 	//   - desc == nil, cache hits, but nydus blob content is empty;
 	//   - desc != nil, cache hits;
 	GetCache(ctx context.Context, compressionType CompressionType) (desc *ocispec.Descriptor, err error)
+
+	// Backend provides a storage for storing nydus blob, for example oss object storage.
+	Backend(ctx context.Context) backend.Backend
 }
 
 type BuildLayer struct {
-	SourceLayer
+	Layer
 
 	parent *BuildLayer
 
@@ -152,6 +156,14 @@ func (layer *BuildLayer) exportBlob(ctx context.Context, blobPath string) (*ocis
 			utils.LayerAnnotationUncompressed: blobDigest.String(),
 			utils.LayerAnnotationNydusBlob:    "true",
 		},
+	}
+
+	backend := layer.Backend(ctx)
+	if backend != nil {
+		if err := backend.Push(ctx, blobPath); err != nil {
+			return nil, errors.Wrapf(err, "push nydus blob to backend %s", backend.Type())
+		}
+		return nil, nil
 	}
 
 	// FIXME: find a efficient way to use fifo to pipe blob data from builder to content store.

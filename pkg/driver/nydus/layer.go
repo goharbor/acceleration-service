@@ -26,6 +26,7 @@ import (
 	"github.com/containerd/containerd/snapshots"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
+	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/packer"
 )
 
@@ -33,6 +34,7 @@ type buildLayer struct {
 	chainID string
 	sn      snapshots.Snapshotter
 	cs      imageContent.Store
+	backend backend.Backend
 }
 
 func (layer *buildLayer) Mount(ctx context.Context) ([]imageMount.Mount, func() error, error) {
@@ -88,4 +90,8 @@ func (layer *buildLayer) GetCache(ctx context.Context, compressionType packer.Co
 func (layer *buildLayer) SetCache(ctx context.Context, compressionType packer.CompressionType, desc *ocispec.Descriptor) error {
 	// TODO: set cache to local storage.
 	return nil
+}
+
+func (layer *buildLayer) Backend(ctx context.Context) backend.Backend {
+	return layer.backend
 }
