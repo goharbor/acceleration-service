@@ -37,6 +37,8 @@ type Option struct {
 	DiffSkipLayer      *int
 
 	OutputJSONPath string
+
+	RafsVersion string
 }
 
 type Builder struct {
@@ -79,7 +81,14 @@ func (builder *Builder) Run(option Option) (*Output, error) {
 		"--source-type",
 		"diff",
 		"--diff-overlay-hint",
+		"--fs-version",
+		option.RafsVersion,
 	}
+	if option.RafsVersion != "" {
+		// FIXME: these options should be handled automatically in builder (nydus-image).
+		args = append(args, "--disable-check")
+	}
+
 	args = append(args, option.DiffLayerPaths...)
 	args = append(args, option.DiffHintLayerPaths...)
 	if option.DiffSkipLayer != nil {
