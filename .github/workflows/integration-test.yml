@@ -1,0 +1,51 @@
+name: Integration Test
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  integration_test:
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: 1.17
+      HARBOR_VERSION: 2.4.1
+      OCI_IMAGE_NAME: nginx
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Install Golang
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Build Accel
+      run: |
+        make install-check-tools
+        make
+
+    - name: Install Harbor
+      run: |
+        wget https://github.com/goharbor/harbor/releases/download/v${{ env.HARBOR_VERSION }}/harbor-offline-installer-v${{ env.HARBOR_VERSION }}.tgz
+        tar xzvf harbor-offline-installer-v${{ env.HARBOR_VERSION }}.tgz
+        cp ./script/integration/harbor.yml harbor/harbor.yml
+        cd harbor
+        sudo ./install.sh
+
+    - name: Prepare Test Image
+      run: |
+        sudo docker pull ${{ env.OCI_IMAGE_NAME }}
+        sudo docker login -u admin -p Harbor12345 localhost
+        sudo docker tag ${{ env.OCI_IMAGE_NAME }} localhost/library/${{ env.OCI_IMAGE_NAME }}
+        sudo docker push localhost/library/${{ env.OCI_IMAGE_NAME }}
+
+    - name: Test Nydus Driver
+      run: |
+        ./script/integration/nydus/test.sh ${{ env.OCI_IMAGE_NAME }}
+
+    - name: Test eStargz Driver
+      run: |
+        ./script/integration/estargz/test.sh ${{ env.OCI_IMAGE_NAME }}

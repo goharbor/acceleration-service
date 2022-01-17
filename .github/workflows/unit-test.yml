@@ -1,0 +1,25 @@
+name: Unit Test
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit_test:
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: 1.17
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Install Golang
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Build Accel
+      run: |
+        go test -v -count=1 ./pkg/...
