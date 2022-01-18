@@ -17,10 +17,12 @@ package utils
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
+	"github.com/containerd/containerd/archive/compression"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -133,4 +135,43 @@ func PackTargzInfo(src, name string, compress bool) (digest.Digest, int64, error
 	defer pipeReader.Close()
 
 	return hash, <-chanSize, <-chanErr
+}
+
+func UnpackFile(reader io.Reader, source, target string) error {
+	rdr, err := compression.DecompressStream(reader)
+	if err != nil {
+		return err
+	}
+	defer rdr.Close()
+
+	found := false
+	tr := tar.NewReader(rdr)
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				return err
+			}
+		}
+		if hdr.Name == source {
+			file, err := os.Create(target)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			if _, err := io.Copy(file, tr); err != nil {
+				return err
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("not found file %s in targz", source)
+	}
+
+	return nil
 }

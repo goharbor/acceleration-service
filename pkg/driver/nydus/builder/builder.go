@@ -19,6 +19,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -27,11 +28,13 @@ import (
 var logger = logrus.WithField("module", "builder")
 
 type Option struct {
-	BootstrapPath string
-	BlobDirPath   string
+	ParentBootstrapPath *string
+	BootstrapDirPath    string
+	BlobDirPath         string
 
-	DiffLayerPaths []string
-	HintLayerPaths []string
+	DiffLayerPaths     []string
+	DiffHintLayerPaths []string
+	DiffSkipLayer      *int
 
 	OutputJSONPath string
 }
@@ -42,9 +45,15 @@ type Builder struct {
 	stderr      io.Writer
 }
 
-type debugJSON struct {
-	Version string
-	Blobs   []string
+type Blob struct {
+	BlobID   string `json:"blob_id"`
+	BlobSize int    `json:"blob_size"`
+}
+
+type Output struct {
+	Version      string   `json:"version"`
+	OrderedBlobs []*Blob  `json:"ordered_blobs"`
+	Bootstraps   []string `json:"bootstraps"`
 }
 
 func New(builderPath string) *Builder {
@@ -56,22 +65,29 @@ func New(builderPath string) *Builder {
 }
 
 // Run excutes nydus-image CLI to build source layer to Nydus format.
-func (builder *Builder) Run(option Option) ([]string, error) {
+func (builder *Builder) Run(option Option) (*Output, error) {
 	args := []string{
 		"create",
-		"--bootstrap",
-		option.BootstrapPath,
 		"--log-level",
 		"warn",
 		"--output-json",
 		option.OutputJSONPath,
+		"--diff-bootstrap-dir",
+		option.BootstrapDirPath,
 		"--blob-dir",
 		option.BlobDirPath,
 		"--source-type",
 		"diff",
+		"--diff-overlay-hint",
 	}
 	args = append(args, option.DiffLayerPaths...)
-	args = append(args, option.HintLayerPaths...)
+	args = append(args, option.DiffHintLayerPaths...)
+	if option.DiffSkipLayer != nil {
+		args = append(args, "--diff-skip-layer", strconv.FormatUint(uint64(*option.DiffSkipLayer), 10))
+	}
+	if option.ParentBootstrapPath != nil {
+		args = append(args, "--parent-bootstrap", *option.ParentBootstrapPath)
+	}
 
 	logrus.Debugf("\tCommand: %s %s", builder.builderPath, strings.Join(args[:], " "))
 
@@ -84,7 +100,7 @@ func (builder *Builder) Run(option Option) ([]string, error) {
 		return nil, err
 	}
 
-	var data debugJSON
+	var data Output
 	jsonBytes, err := ioutil.ReadFile(option.OutputJSONPath)
 	if err != nil {
 		return nil, err
@@ -93,5 +109,5 @@ func (builder *Builder) Run(option Option) ([]string, error) {
 		return nil, err
 	}
 
-	return data.Blobs, nil
+	return &data, nil
 }

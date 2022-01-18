@@ -19,8 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
 
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go"
@@ -29,109 +27,14 @@ import (
 
 	imageContent "github.com/containerd/containerd/content"
 	"github.com/goharbor/acceleration-service/pkg/content"
+	"github.com/goharbor/acceleration-service/pkg/driver/nydus/packer"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 )
 
-// WriteBlob writes Nydus blob data to content store, and returns
-// blob layer descriptor.
-func WriteBlob(
-	ctx context.Context, content content.Provider, blobPath string,
-) (*ocispec.Descriptor, error) {
-	blobFile, err := os.Open(blobPath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "open blob %s", blobPath)
-	}
-	defer blobFile.Close()
-
-	blobStat, err := blobFile.Stat()
-	if err != nil {
-		return nil, errors.Wrapf(err, "stat blob %s", blobPath)
-	}
-
-	blobID := path.Base(blobPath)
-	blobDigest := digest.NewDigestFromEncoded(digest.SHA256, blobID)
-	desc := ocispec.Descriptor{
-		Digest:    blobDigest,
-		Size:      blobStat.Size(),
-		MediaType: MediaTypeNydusBlob,
-		Annotations: map[string]string{
-			// Use `LayerAnnotationUncompressed` to generate
-			// DiffID of layer defined in OCI spec.
-			LayerAnnotationUncompressed: blobDigest.String(),
-			LayerAnnotationNydusBlob:    "true",
-		},
-	}
-
-	if err := imageContent.WriteBlob(
-		ctx, content.ContentStore(), desc.Digest.String(), blobFile, desc,
-	); err != nil {
-		return nil, errors.Wrapf(err, "write blob %s to content store", blobPath)
-	}
-
-	return &desc, nil
-}
-
-// WriteBootstrap writes Nydus bootstrap data to content store, and
-// returns bootstrap layer descriptor.
-func WriteBootstrap(
-	ctx context.Context, content content.Provider, bootstrapPath string, blobs []string,
-) (*ocispec.Descriptor, error) {
-	bootstrapFile, err := os.Open(bootstrapPath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "open bootstrap %s", bootstrapPath)
-	}
-	defer bootstrapFile.Close()
-
-	compressedDigest, compressedSize, err := utils.PackTargzInfo(
-		bootstrapPath, BootstrapFileNameInLayer, true,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "calculate compressed boostrap digest")
-	}
-
-	uncompressedDigest, _, err := utils.PackTargzInfo(
-		bootstrapPath, BootstrapFileNameInLayer, false,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "calculate uncompressed boostrap digest")
-	}
-
-	blobListBytes, err := json.Marshal(blobs)
-	if err != nil {
-		return nil, errors.Wrap(err, "marshal blob list")
-	}
-	bootstrapMediaType := ocispec.MediaTypeImageLayerGzip
-	desc := ocispec.Descriptor{
-		Digest:    compressedDigest,
-		Size:      compressedSize,
-		MediaType: bootstrapMediaType,
-		Annotations: map[string]string{
-			// Use `utils.LayerAnnotationUncompressed` to generate
-			// DiffID of layer defined in OCI spec.
-			LayerAnnotationUncompressed:   uncompressedDigest.String(),
-			LayerAnnotationNydusBootstrap: "true",
-			LayerAnnotationNydusBlobIDs:   string(blobListBytes),
-		},
-	}
-
-	reader, err := utils.PackTargz(bootstrapPath, BootstrapFileNameInLayer, true)
-	if err != nil {
-		return nil, errors.Wrap(err, "pack bootstrap to tar.gz")
-	}
-	defer reader.Close()
-
-	if err := imageContent.WriteBlob(
-		ctx, content.ContentStore(), desc.Digest.String(), reader, desc,
-	); err != nil {
-		return nil, errors.Wrapf(err, "write bootstrap %s to content store", bootstrapPath)
-	}
-
-	return &desc, nil
-}
-
 // Export exports all Nydus layer descriptors to a image manifest, then writes
 // to content store, and returns Nydus image manifest.
-func Export(ctx context.Context, content content.Provider, layers []ocispec.Descriptor) (*ocispec.Descriptor, error) {
+func Export(ctx context.Context, content content.Provider, layers []packer.Descriptor) (*ocispec.Descriptor, error) {
+	// Export image config.
 	ociConfigDesc, err := content.Image().Config(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "get source image config description")
@@ -147,25 +50,24 @@ func Export(ctx context.Context, content content.Provider, layers []ocispec.Desc
 	nydusConfig.RootFS.DiffIDs = []digest.Digest{}
 	nydusConfig.History = []ocispec.History{}
 
-	validAnnotationKeys := map[string]bool{
-		LayerAnnotationNydusBlob:      true,
-		LayerAnnotationNydusBlobIDs:   true,
-		LayerAnnotationNydusBootstrap: true,
-	}
-	for idx, desc := range layers {
-		layerDiffID := digest.Digest(desc.Annotations[LayerAnnotationUncompressed])
-		if layerDiffID == "" {
-			layerDiffID = desc.Digest
+	descs := []ocispec.Descriptor{}
+	for idx := range layers {
+		layer := layers[idx]
+
+		// Append blob layer.
+		if layer.Blob != nil {
+			layerDiffID := digest.Digest(layer.Blob.Annotations[utils.LayerAnnotationUncompressed])
+			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+			delete(layer.Blob.Annotations, utils.LayerAnnotationUncompressed)
+			descs = append(descs, *layer.Blob)
 		}
-		nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
-		if desc.Annotations != nil {
-			newAnnotations := make(map[string]string)
-			for key, value := range desc.Annotations {
-				if validAnnotationKeys[key] {
-					newAnnotations[key] = value
-				}
-			}
-			layers[idx].Annotations = newAnnotations
+
+		// Append bootstrap layer.
+		if idx == len(layers)-1 {
+			layerDiffID := digest.Digest(layer.Bootstrap.Annotations[utils.LayerAnnotationUncompressed])
+			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+			delete(layer.Bootstrap.Annotations, utils.LayerAnnotationUncompressed)
+			descs = append(descs, layer.Bootstrap)
 		}
 	}
 	nydusConfigDesc, nydusConfigBytes, err := utils.MarshalToDesc(nydusConfig, ocispec.MediaTypeImageConfig)
@@ -179,6 +81,7 @@ func Export(ctx context.Context, content content.Provider, layers []ocispec.Desc
 		return nil, errors.Wrap(err, "write image config")
 	}
 
+	// Export image manifest.
 	nydusManifest := struct {
 		MediaType string `json:"mediaType,omitempty"`
 		ocispec.Manifest
@@ -189,7 +92,7 @@ func Export(ctx context.Context, content content.Provider, layers []ocispec.Desc
 				SchemaVersion: 2,
 			},
 			Config: *nydusConfigDesc,
-			Layers: layers,
+			Layers: descs,
 		},
 	}
 	nydusManifestDesc, manifestBytes, err := utils.MarshalToDesc(nydusManifest, ocispec.MediaTypeImageManifest)
@@ -199,8 +102,18 @@ func Export(ctx context.Context, content content.Provider, layers []ocispec.Desc
 
 	labels := map[string]string{}
 	labels["containerd.io/gc.ref.content.0"] = nydusConfigDesc.Digest.String()
-	for i, desc := range layers {
-		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i+1)] = desc.Digest.String()
+	for idx := range layers {
+		layer := layers[idx]
+		if layer.Blob == nil {
+			continue
+		}
+
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+1)] = layer.Blob.Digest.String()
+
+		// Append bootstrap layer.
+		if idx == len(layers)-1 {
+			labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+2)] = layer.Bootstrap.Digest.String()
+		}
 	}
 
 	if err := imageContent.WriteBlob(
