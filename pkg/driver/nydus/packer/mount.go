@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Ported from BuildKit project, copyright The BuildKit Authors
-// https://github.com/moby/buildkit/blob/15fb1145afa48bf81fbce41634bdd36c02454f99/util/overlay/overlay_linux.go
+// https://github.com/moby/buildkit/blob/40c0091bd0aef940a78b7aed050efc2f9416ee88/util/overlay/overlay_linux.go
 
 package packer
 
@@ -96,7 +96,7 @@ func GetOverlayLayers(m mount.Mount) ([]string, error) {
 			for i, j := 0, len(l)-1; i < j; i, j = i+1, j-1 {
 				l[i], l[j] = l[j], l[i] // make l[0] = bottommost
 			}
-		} else if strings.HasPrefix(o, "workdir=") || o == "index=off" || o == "userxattr" {
+		} else if strings.HasPrefix(o, "workdir=") || o == "index=off" || o == "userxattr" || strings.HasPrefix(o, "redirect_dir=") {
 			// these options are possible to specified by the snapshotter but not indicate dir locations.
 			continue
 		} else {
