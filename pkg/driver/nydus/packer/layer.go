@@ -86,7 +86,9 @@ func (layer *BuildLayer) mount(ctx context.Context) error {
 }
 
 func (layer *BuildLayer) umount(ctx context.Context) {
-	if layer.mounts == nil {
+	// If the previous mount operation did not complete, umount should
+	// not be performed either.
+	if layer.mounts == nil || layer.mountRelease == nil {
 		return
 	}
 
