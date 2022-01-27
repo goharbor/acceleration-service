@@ -42,6 +42,8 @@ func NewBackend(_type string, config []byte) (Backend, error) {
 	switch _type {
 	case BackendTypeOSS:
 		return newOSSBackend(config)
+	case BackendTypeLocalFS:
+		return newLocalFSBackend(config)
 	default:
 		return nil, fmt.Errorf("unsupported backend type %s", _type)
 	}

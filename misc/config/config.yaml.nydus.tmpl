@@ -44,9 +44,11 @@ converter:
       builder: /usr/bin/nydus-image
       # specify nydus format version, possible values: 5, 6
       rafs_version: 5
-      # specify a storage backend for storing nydus blob, optional, possible values: oss
+      # specify a storage backend for storing nydus blob, optional, possible values: oss, localfs
       # backend_type: oss
       # backend_config: '{"endpoint":"","access_key_id":"","access_key_secret":"","bucket_name":""}'
+      # backend_type: localfs
+      # backend_config: '{"dir":"/path/to/dir"}'
   rules:
     # add suffix to tag of source image reference as target image reference
     - tag_suffix: -nydus
