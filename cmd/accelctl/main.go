@@ -24,6 +24,8 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/goharbor/acceleration-service/pkg/client"
+	"github.com/goharbor/acceleration-service/pkg/config"
+	"github.com/goharbor/acceleration-service/pkg/handler"
 )
 
 var versionGitCommit string
@@ -50,17 +52,17 @@ func main() {
 		Name:    "accelctl",
 		Usage:   "A CLI tool to manage acceleration service",
 		Version: version,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "addr", Value: "localhost:2077", Usage: "Service address in format <host:port>."},
-		},
-		Before: func(c *cli.Context) error {
-			ctl = client.NewClient(c.String("addr"))
-			return nil
-		},
 		Commands: []*cli.Command{
 			{
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "addr", Value: "localhost:2077", Usage: "Service address in format <host:port>."},
+				},
+				Before: func(c *cli.Context) error {
+					ctl = client.NewClient(c.String("addr"))
+					return nil
+				},
 				Name:  "task",
-				Usage: "Manage conversion tasks",
+				Usage: "Manage conversion tasks in remote acceld",
 				Subcommands: []*cli.Command{
 					{
 						Name:  "create",
@@ -116,6 +118,32 @@ func main() {
 							return nil
 						},
 					},
+				},
+			},
+			{
+				Name:  "convert",
+				Usage: "Convert an image locally (one-time mode)",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "config", Required: true, Usage: "Specify the path of config in yaml format"},
+				},
+				ArgsUsage: "[SOURCE]",
+				Action: func(c *cli.Context) error {
+					source := c.Args().First()
+					if source == "" {
+						return fmt.Errorf("source is required")
+					}
+
+					cfg, err := config.Parse(c.String("config"))
+					if err != nil {
+						return err
+					}
+
+					handler, err := handler.NewLocalHandler(cfg)
+					if err != nil {
+						return err
+					}
+
+					return handler.Convert(c.Context, source, true)
 				},
 			},
 		},

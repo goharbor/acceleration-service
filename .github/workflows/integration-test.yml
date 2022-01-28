@@ -44,8 +44,19 @@ jobs:
 
     - name: Test Nydus Driver
       run: |
+        NYDUS_VERSION=2.0.0-rc.0
+
+        # Download nydus components
+        wget https://github.com/dragonflyoss/image-service/releases/download/v$NYDUS_VERSION/nydus-static-v$NYDUS_VERSION-x86_64.tgz
+        tar xzvf nydus-static-v$NYDUS_VERSION-x86_64.tgz
+        mkdir -p /usr/bin
+        sudo mv nydus-static/nydus-image nydus-static/nydusd-fusedev nydus-static/nydusify /usr/bin/
         ./script/integration/nydus/test.sh ${{ env.OCI_IMAGE_NAME }}
 
     - name: Test eStargz Driver
       run: |
         ./script/integration/estargz/test.sh ${{ env.OCI_IMAGE_NAME }}
+
+    - name: Test one-time mode
+      run: |
+        ./script/integration/one-time.sh ${{ env.OCI_IMAGE_NAME }}

@@ -108,3 +108,18 @@ INFO[2021-09-17T05:44:04.317992888Z] converted image 192.168.1.1/library/nginx:l
 ```
 
 After that, we will find converted artifact in Harbor interface with name `<harbor-service-address>/nginx:latest-nydus`.
+
+### One-time mode
+
+One-time mode allows to do a conversion without starting the `acceld` service (still requires a local containerd service), using `accelctl` like this:
+
+```
+$ accelctl convert --config ./misc/config/config.yaml 192.168.1.1/library/nginx:latest
+
+INFO[2022-01-28T03:39:28.039029557Z] pulling image 192.168.1.1/library/nginx:latest     module=converter
+INFO[2022-01-28T03:39:28.075375146Z] pulled image 192.168.1.1/library/nginx:latest      module=converter
+INFO[2022-01-28T03:39:28.075530522Z] converting image 192.168.1.1/library/nginx:latest  module=converter
+INFO[2022-01-28T03:39:29.561103924Z] converted image 192.168.1.1/library/nginx:latest-nydus  module=converter
+INFO[2022-01-28T03:39:29.561197593Z] pushing image 192.168.1.1/library/nginx:latest-nydus  module=converter
+INFO[2022-01-28T03:39:29.587585066Z] pushed image 192.168.1.1/library/nginx:latest-nydus  module=converter
+```
