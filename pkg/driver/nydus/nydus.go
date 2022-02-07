@@ -112,7 +112,9 @@ func (nydus *Driver) makeManifestIndex(ctx context.Context, content content.Prov
 	}
 
 	labels := map[string]string{}
-	labels["containerd.io/gc.ref.content.0"] = indexDesc.Digest.String()
+	for idx, desc := range descs {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx)] = desc.Digest.String()
+	}
 	if err := imageContent.WriteBlob(
 		ctx, content.ContentStore(), indexDesc.Digest.String(), bytes.NewReader(indexBytes), *indexDesc, imageContent.WithLabels(labels),
 	); err != nil {
@@ -191,25 +193,22 @@ func (nydus *Driver) Convert(ctx context.Context, content content.Provider) (*oc
 			})
 			platform = &_platform
 		}
-		supportedPlatform := false
-		if platform != nil && platform.OS == supportedOS {
-			supportedPlatform = true
-		}
 
-		if !supportedPlatform {
-			logrus.Warnf("skip unsupported platform %v", platform)
+		if platform.OS != supportedOS {
+			logrus.Warnf("skip unsupported platform: %v", platform)
 			continue
 		}
 
 		if utils.IsNydusPlatform(platform) || utils.IsNydusManifest(&manifest) {
 			// Skip the conversion of existing nydus manifest.
-			logrus.Warnf("skip existing nydus manifest %v", platform)
+			logrus.Warnf("skip existing nydus manifest: %v", platform)
 			continue
 		}
 
 		if nydus.mergeManifest {
-			// Ensure that both OCI v1 manifest and nydus manifest are present in the target manifest index.
-			// The nydus manifest is marked with `"os.features": [ "nydus.remoteimage.v1" ]`.
+			// Ensure that both OCIv1 manifest and nydus manifest are present as
+			// manifest index in the target image. The nydus manifest is marked
+			// in platform field with `"os.features": [ "nydus.remoteimage.v1" ]`.
 			// Example: https://github.com/dragonflyoss/image-service/blob/d3e16a4434ec58886531a3348efc1a25dac6ede9/contrib/nydusify/examples/manifest/index.json
 			targetDescs = append(targetDescs, srcDesc)
 		}
