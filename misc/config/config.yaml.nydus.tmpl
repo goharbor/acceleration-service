@@ -34,6 +34,8 @@ provider:
 converter:
   # number of worker for executing conversion task
   worker: 5
+  # enable to add harbor specified annotations to converted image for tracking.
+  harbor_annotation: true
   driver:
     # accelerator driver type: `nydus`
     type: nydus

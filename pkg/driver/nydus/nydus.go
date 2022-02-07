@@ -46,6 +46,7 @@ type Driver struct {
 	backend       backend.Backend
 	packer        *packer.Packer
 	mergeManifest bool
+	rafsVersion   string
 }
 
 func New(cfg map[string]string) (*Driver, error) {
@@ -81,6 +82,9 @@ func New(cfg map[string]string) (*Driver, error) {
 	}
 
 	rafsVersion := cfg["rafs_version"]
+	if rafsVersion == "" {
+		rafsVersion = "5"
+	}
 
 	p, err := packer.New(packer.Option{
 		WorkDir:     workDir,
@@ -95,6 +99,7 @@ func New(cfg map[string]string) (*Driver, error) {
 		packer:        p,
 		backend:       _backend,
 		mergeManifest: mergeManifest,
+		rafsVersion:   rafsVersion,
 	}, nil
 }
 
@@ -237,4 +242,12 @@ func (nydus *Driver) Convert(ctx context.Context, content content.Provider) (*oc
 	}
 
 	return nydus.makeManifestIndex(ctx, content, targetDescs)
+}
+
+func (nydus *Driver) Name() string {
+	return "nydus"
+}
+
+func (nydus *Driver) Version() string {
+	return nydus.rafsVersion
 }

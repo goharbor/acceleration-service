@@ -35,6 +35,14 @@ type Driver interface {
 	// converted image manifest will be returned, otherwise a
 	// non-nil error will be returned.
 	Convert(context.Context, content.Provider) (*ocispec.Descriptor, error)
+
+	// Name gets the driver type name, it is used to identify
+	// different accelerated image formats.
+	Name() string
+
+	// Version gets the driver version, it is used to identify
+	// different accelerated image format versions with same driver.
+	Version() string
 }
 
 func NewLocalDriver(cfg *config.DriverConfig) (Driver, error) {

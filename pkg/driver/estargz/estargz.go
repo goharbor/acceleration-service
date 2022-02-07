@@ -45,6 +45,14 @@ func (d *Driver) Convert(ctx context.Context, p content.Provider) (*ocispec.Desc
 		ctx, p.ContentStore(), p.Image().Target())
 }
 
+func (d *Driver) Name() string {
+	return "estargz"
+}
+
+func (d *Driver) Version() string {
+	return ""
+}
+
 func getESGZConvertOpts(cfg map[string]string) (opts []estargz.Option, docker2oci bool, err error) {
 	if s, ok := cfg["docker2oci"]; ok {
 		b, err := strconv.ParseBool(s)

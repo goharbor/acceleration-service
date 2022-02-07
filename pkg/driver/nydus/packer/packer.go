@@ -53,10 +53,6 @@ type Option struct {
 }
 
 func New(option Option) (*Packer, error) {
-	if option.RafsVersion == "" {
-		option.RafsVersion = "5"
-	}
-
 	return &Packer{
 		parentWorkDir: option.WorkDir,
 		builderPath:   option.BuilderPath,

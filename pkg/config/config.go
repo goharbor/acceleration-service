@@ -65,9 +65,10 @@ type ConversionRule struct {
 }
 
 type ConverterConfig struct {
-	Worker int              `yaml:"worker"`
-	Driver DriverConfig     `yaml:"driver"`
-	Rules  []ConversionRule `yaml:"rules"`
+	Worker           int              `yaml:"worker"`
+	Driver           DriverConfig     `yaml:"driver"`
+	HarborAnnotation bool             `yaml:"harbor_annotation"`
+	Rules            []ConversionRule `yaml:"rules"`
 }
 
 type DriverConfig struct {
