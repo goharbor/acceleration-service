@@ -63,6 +63,8 @@ type Layer interface {
 type BuildLayer struct {
 	Layer
 
+	rafsVersion string
+
 	parent *BuildLayer
 
 	mounts       []mount.Mount
@@ -208,8 +210,9 @@ func (layer *BuildLayer) exportBootstrap(ctx context.Context, sg *singleflight.G
 			Annotations: map[string]string{
 				// Use `containerd.io/uncompressed` to generate DiffID of
 				// layer defined in OCI spec.
-				utils.LayerAnnotationUncompressed:   uncompressedDigest.String(),
-				utils.LayerAnnotationNydusBootstrap: "true",
+				utils.LayerAnnotationUncompressed:     uncompressedDigest.String(),
+				utils.LayerAnnotationNydusBootstrap:   "true",
+				utils.LayerAnnotationNydusRAFSVersion: layer.rafsVersion,
 			},
 		}
 

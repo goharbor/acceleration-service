@@ -59,7 +59,13 @@ func New(cfg map[string]string) (*Driver, error) {
 		}
 	}
 
-	p, err := packer.New(workDir, builderPath)
+	rafsVersion := cfg["rafs_version"]
+
+	p, err := packer.New(packer.Option{
+		WorkDir:     workDir,
+		BuilderPath: builderPath,
+		RafsVersion: rafsVersion,
+	})
 	if err != nil {
 		return nil, errors.Wrap(err, "create nydus packer")
 	}
