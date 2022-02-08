@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/goharbor/acceleration-service/pkg/config"
+	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 )
 
@@ -93,9 +94,12 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		return errors.Wrapf(err, "get resolver for %s", ref)
 	}
 
+	// TODO: enable to configure the target platforms.
+	platformMatcher := nydusUtils.ExcludeNydusPlatformComparer{MatchComparer: platforms.All}
+
 	opts := []containerd.RemoteOpt{
 		// TODO: sets max concurrent downloaded layer limit by containerd.WithMaxConcurrentDownloads.
-		containerd.WithPlatformMatcher(platforms.All),
+		containerd.WithPlatformMatcher(platformMatcher),
 		containerd.WithImageHandler(images.HandlerFunc(
 			func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 				if images.IsLayerType(desc.MediaType) {
@@ -112,9 +116,9 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}
-	pvd.image = containerd.NewImageWithPlatform(pvd.client, image, platforms.DefaultStrict())
+	pvd.image = containerd.NewImageWithPlatform(pvd.client, image, platformMatcher)
 
-	// Unpack the image (default platform only)
+	// Unpack the source image.
 	return pvd.image.Unpack(ctx, "")
 }
 
