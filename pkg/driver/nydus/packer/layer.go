@@ -24,6 +24,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
@@ -70,6 +71,7 @@ type BuildLayer struct {
 	mounts       []mount.Mount
 	release      func() error
 	mountRelease chan bool
+	umountEg     *errgroup.Group
 
 	diffPath     string
 	diffHintPath string
@@ -109,7 +111,7 @@ func (layer *BuildLayer) mountWithLower(ctx context.Context) error {
 		lower = layer.parent.mounts
 	}
 
-	go func() {
+	layer.umountEg.Go(func() error {
 		if err := mount.WithTempMount(ctx, lower, func(lowerRoot string) error {
 			return mount.WithTempMount(ctx, upper, func(upperRoot string) error {
 				// FIXME: for non-overlay snapshotter, we can't use diff hint feature,
@@ -128,8 +130,10 @@ func (layer *BuildLayer) mountWithLower(ctx context.Context) error {
 			})
 		}); err != nil {
 			mountDone <- errors.Wrap(err, "mount with temp")
+			return err
 		}
-	}()
+		return nil
+	})
 
 	err := <-mountDone
 
