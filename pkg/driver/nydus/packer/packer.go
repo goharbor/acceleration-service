@@ -156,6 +156,10 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 
 	descs := make([]Descriptor, len(layers))
 
+	// Used to wait all umount finish in containerd#mount.WithTempMount, in case
+	// of temp mount leak after acceld/accelctl process exits.
+	umountEg := errgroup.Group{}
+
 	// Find cache first, to skip layers that have been built.
 	buildLayers := []*BuildLayer{}
 	for idx := range layers {
@@ -192,6 +196,7 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 			Layer:       layer,
 			rafsVersion: p.rafsVersion,
 			parent:      parent,
+			umountEg:    &umountEg,
 		}
 		parent = &buildLayer
 
@@ -202,6 +207,9 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 		// Release all layer mounts.
 		for idx := range buildLayers {
 			buildLayers[idx].umount(ctx)
+		}
+		if err := umountEg.Wait(); err != nil {
+			logrus.WithError(err).Warnf("failed to umount layer")
 		}
 	}()
 
