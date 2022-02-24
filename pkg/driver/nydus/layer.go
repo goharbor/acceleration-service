@@ -27,7 +27,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
-	"github.com/goharbor/acceleration-service/pkg/driver/nydus/packer"
 )
 
 type buildLayer struct {
@@ -82,12 +81,12 @@ func (layer *buildLayer) ContentStore(ctx context.Context) imageContent.Store {
 	return layer.cs
 }
 
-func (layer *buildLayer) GetCache(ctx context.Context, compressionType packer.CompressionType) (*ocispec.Descriptor, error) {
+func (layer *buildLayer) GetCache(ctx context.Context) (bootstrapDesc *ocispec.Descriptor, blobDescs []ocispec.Descriptor, err error) {
 	// TODO: get cache from local storage.
-	return nil, errdefs.ErrNotFound
+	return nil, nil, errdefs.ErrNotFound
 }
 
-func (layer *buildLayer) SetCache(ctx context.Context, compressionType packer.CompressionType, desc *ocispec.Descriptor) error {
+func (layer *buildLayer) SetCache(ctx context.Context, bootstrapDesc ocispec.Descriptor, blobDescs []ocispec.Descriptor) error {
 	// TODO: set cache to local storage.
 	return nil
 }

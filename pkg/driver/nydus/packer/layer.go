@@ -45,17 +45,14 @@ type Layer interface {
 	// Mount mounts layer by snapshotter, release func provides a unmount operation.
 	Mount(ctx context.Context) (mounts []mount.Mount, release func() error, err error)
 
-	// SetCache records nydus bootstrap/blob descriptor to cache, desc == nil if
-	// nydus blob content is empty.
-	SetCache(ctx context.Context, compressionType CompressionType, desc *ocispec.Descriptor) error
+	// SetCache records nydus bootstrap and blob descriptors to cache.
+	SetCache(ctx context.Context, bootstrapDesc ocispec.Descriptor, blobDescs []ocispec.Descriptor) error
 
-	// GetCache get nydus bootstrap/blob descriptor from cache, following situations
+	// GetCache get nydus bootstrap and blob descriptors from cache, following situations
 	// should be handled:
 	// err != nil, cache miss;
-	// err == nil:
-	//   - desc == nil, cache hits, but nydus blob content is empty;
-	//   - desc != nil, cache hits;
-	GetCache(ctx context.Context, compressionType CompressionType) (desc *ocispec.Descriptor, err error)
+	// err == nil, cache hits;
+	GetCache(ctx context.Context) (bootstrapDesc *ocispec.Descriptor, blobDescs []ocispec.Descriptor, err error)
 
 	// Backend provides a storage for storing nydus blob, for example oss object storage.
 	Backend(ctx context.Context) backend.Backend

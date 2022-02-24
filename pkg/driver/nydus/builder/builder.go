@@ -52,10 +52,14 @@ type Blob struct {
 	BlobSize int    `json:"blob_size"`
 }
 
+type Artifact struct {
+	BootstrapName string `json:"bootstrap_name"`
+	Blobs         []Blob `json:"blobs"`
+}
+
 type Output struct {
-	Version      string   `json:"version"`
-	OrderedBlobs []*Blob  `json:"ordered_blobs"`
-	Bootstraps   []string `json:"bootstraps"`
+	Version   string     `json:"version"`
+	Artifacts []Artifact `json:"artifacts"`
 }
 
 func New(builderPath string) *Builder {
