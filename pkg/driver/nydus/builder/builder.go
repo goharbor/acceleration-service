@@ -16,6 +16,7 @@ package builder
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os/exec"
@@ -29,6 +30,7 @@ var logger = logrus.WithField("module", "builder")
 
 type Option struct {
 	ParentBootstrapPath *string
+	ChunkDictPath       *string
 	BootstrapDirPath    string
 	BlobDirPath         string
 
@@ -100,6 +102,9 @@ func (builder *Builder) Run(option Option) (*Output, error) {
 	}
 	if option.ParentBootstrapPath != nil {
 		args = append(args, "--parent-bootstrap", *option.ParentBootstrapPath)
+	}
+	if option.ChunkDictPath != nil {
+		args = append(args, "--chunk-dict", fmt.Sprintf("bootstrap=%s", *option.ChunkDictPath))
 	}
 
 	logrus.Debugf("\tCommand: %s %s", builder.builderPath, strings.Join(args[:], " "))

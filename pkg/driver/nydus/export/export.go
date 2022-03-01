@@ -33,7 +33,7 @@ import (
 
 // Export exports all Nydus layer descriptors to a image manifest, then writes
 // to content store, and returns Nydus image manifest.
-func Export(ctx context.Context, content content.Provider, layers []packer.Descriptor) (*ocispec.Descriptor, error) {
+func Export(ctx context.Context, content content.Provider, layers []packer.Descriptor, hasBackend bool) (*ocispec.Descriptor, error) {
 	if len(layers) <= 0 {
 		return nil, fmt.Errorf("can't export image with empty layers")
 	}
@@ -58,11 +58,13 @@ func Export(ctx context.Context, content content.Provider, layers []packer.Descr
 	finalLayer := layers[len(layers)-1]
 
 	// Append blob layers.
-	for _, blobDesc := range finalLayer.Blobs {
-		layerDiffID := digest.Digest(blobDesc.Annotations[utils.LayerAnnotationUncompressed])
-		nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
-		delete(blobDesc.Annotations, utils.LayerAnnotationUncompressed)
-		descs = append(descs, blobDesc)
+	if !hasBackend {
+		for _, blobDesc := range finalLayer.Blobs {
+			layerDiffID := digest.Digest(blobDesc.Annotations[utils.LayerAnnotationUncompressed])
+			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+			delete(blobDesc.Annotations, utils.LayerAnnotationUncompressed)
+			descs = append(descs, blobDesc)
+		}
 	}
 
 	// Append bootstrap layer.

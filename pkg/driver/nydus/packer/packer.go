@@ -22,6 +22,7 @@ import (
 	"path"
 
 	"github.com/containerd/containerd/content"
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -44,12 +45,19 @@ type Packer struct {
 	builderPath   string
 	rafsVersion   string
 	sg            singleflight.Group
+	cachedBlobs   map[digest.Digest]*ocispec.Descriptor
 }
 
 type Option struct {
 	WorkDir     string
 	BuilderPath string
 	RafsVersion string
+	ChunkDict   *ChunkDict
+}
+
+type ChunkDict struct {
+	BootstrapPath string
+	Blobs         map[string]ocispec.Descriptor
 }
 
 func New(option Option) (*Packer, error) {
@@ -57,7 +65,25 @@ func New(option Option) (*Packer, error) {
 		parentWorkDir: option.WorkDir,
 		builderPath:   option.BuilderPath,
 		rafsVersion:   option.RafsVersion,
+		cachedBlobs:   make(map[digest.Digest]*ocispec.Descriptor),
 	}, nil
+}
+
+func getDeltaBlobs(pre, cur []ocispec.Descriptor) []ocispec.Descriptor {
+	preMap := map[string]ocispec.Descriptor{}
+
+	for _, desc := range pre {
+		preMap[desc.Digest.String()] = desc
+	}
+
+	delta := []ocispec.Descriptor{}
+	for _, desc := range cur {
+		if _, ok := preMap[desc.Digest.String()]; !ok {
+			delta = append(delta, desc)
+		}
+	}
+
+	return delta
 }
 
 func (p *Packer) prepareWorkdir() (string, func() error, error) {
@@ -85,7 +111,7 @@ func (p *Packer) prepareWorkdir() (string, func() error, error) {
 	return workDir, cleanup, nil
 }
 
-func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildLayer, diffSkip *int) (*builder.Output, error) {
+func (p *Packer) diffBuild(ctx context.Context, workDir string, chunkDict *ChunkDict, layers []*BuildLayer, diffSkip *int) (*builder.Output, error) {
 	diffPaths := []string{}
 	diffHintPaths := []string{}
 
@@ -127,8 +153,13 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildL
 	}
 
 	build := builder.New(p.builderPath)
+	var chunkDictPath *string
+	if chunkDict != nil {
+		chunkDictPath = &chunkDict.BootstrapPath
+	}
 	output, err := build.Run(builder.Option{
 		BootstrapDirPath:    bootstrapDir,
+		ChunkDictPath:       chunkDictPath,
 		BlobDirPath:         blobDir,
 		ParentBootstrapPath: parentBootstrapPath,
 
@@ -146,7 +177,7 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildL
 	return output, nil
 }
 
-func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error) {
+func (p *Packer) Build(ctx context.Context, chunkDict *ChunkDict, layers []Layer) ([]Descriptor, error) {
 	var diffSkip *int
 	var parent *BuildLayer
 
@@ -170,6 +201,9 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 			descs[idx] = Descriptor{
 				Blobs:     cachedBlobDescs,
 				Bootstrap: *cachedBootstrapDesc,
+			}
+			for _, blob := range cachedBlobDescs {
+				p.cachedBlobs[blob.Digest] = &blob
 			}
 			if parent == nil || diffSkip != nil {
 				_idx := idx
@@ -240,7 +274,7 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 	}()
 
 	// Call nydus builder to build, skip the layers before `diffSkip`.
-	output, err := p.diffBuild(ctx, workDir, buildLayers, diffSkip)
+	output, err := p.diffBuild(ctx, workDir, chunkDict, buildLayers, diffSkip)
 	if err != nil {
 		return nil, errors.Wrap(err, "diff build with nydus")
 	}
@@ -272,10 +306,25 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 					exportEg.Go(func(blobIdx int) func() error {
 						return func() error {
 							blobID := artifact.Blobs[blobIdx].BlobID
-							blobPath := path.Join(workDir, "blobs", blobID)
-							layer := buildLayers[idx]
+
+							// Deduplicate the export of blob in chunk dict image.
+							if chunkDict != nil {
+								if desc, ok := chunkDict.Blobs[blobID]; ok {
+									descs[idx].Blobs[blobIdx] = desc
+									return nil
+								}
+							}
+
+							// Deduplicate the export of cached blob.
+							blobDigest := digest.NewDigestFromHex(string(digest.SHA256), blobID)
+							if desc, ok := p.cachedBlobs[blobDigest]; ok {
+								descs[idx].Blobs[blobIdx] = *desc
+								return nil
+							}
 
 							// Use singleflight to deduplicate the export of same blob.
+							blobPath := path.Join(workDir, "blobs", blobID)
+							layer := buildLayers[idx]
 							_desc, err, _ := p.sg.Do(blobID, func() (interface{}, error) {
 								return layer.exportBlob(ctx, blobPath)
 							})
@@ -301,11 +350,11 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 
 	// Export nydus bootstraps to content store.
 	for idx := range output.Artifacts {
-		idx := base + idx
 		artifact := output.Artifacts[idx]
 		bootstrapPath := path.Join(workDir, "bootstraps", artifact.BootstrapName)
 		exportEg.Go(func(idx int) func() error {
 			return func() error {
+				idx := base + idx
 				layer := buildLayers[idx]
 				desc, err := layer.exportBootstrap(ctx, &p.sg, bootstrapPath)
 				if err != nil {
@@ -324,8 +373,15 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 
 	// Set nydus bootstraps/blobs to cache.
 	for idx := range output.Artifacts {
+		idx := base + idx
+		pre := []ocispec.Descriptor{}
+		if idx >= 1 {
+			pre = descs[idx-1].Blobs
+		}
+		delta := getDeltaBlobs(pre, descs[idx].Blobs)
+
 		layer := buildLayers[idx]
-		if err := layer.SetCache(ctx, descs[idx].Bootstrap, descs[idx].Blobs); err != nil {
+		if err := layer.SetCache(ctx, descs[idx].Bootstrap, delta); err != nil {
 			return nil, errors.Wrap(err, "set nydus bootstrap cache")
 		}
 	}

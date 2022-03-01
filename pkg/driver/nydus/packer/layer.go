@@ -196,7 +196,7 @@ func (layer *BuildLayer) exportBootstrap(ctx context.Context, sg *singleflight.G
 		bootstrapPath, utils.BootstrapFileNameInLayer, true,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "calculate compressed boostrap digest")
+		return nil, errors.Wrap(err, "calculate compressed bootstrap digest")
 	}
 
 	_desc, err, _ := sg.Do(compressedDigest.String(), func() (interface{}, error) {
@@ -204,7 +204,7 @@ func (layer *BuildLayer) exportBootstrap(ctx context.Context, sg *singleflight.G
 			bootstrapPath, utils.BootstrapFileNameInLayer, false,
 		)
 		if err != nil {
-			return nil, errors.Wrap(err, "calculate uncompressed boostrap digest")
+			return nil, errors.Wrap(err, "calculate uncompressed bootstrap digest")
 		}
 
 		desc := ocispec.Descriptor{
