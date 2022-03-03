@@ -24,6 +24,7 @@ import (
 
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/content"
+	"github.com/goharbor/acceleration-service/pkg/converter/annotation"
 	"github.com/goharbor/acceleration-service/pkg/driver"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/metrics"
@@ -118,6 +119,19 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 	desc, err := cvt.driver.Convert(ctx, content)
 	if err != nil {
 		return errors.Wrap(err, "convert image")
+	}
+
+	if cvt.cfg.Converter.HarborAnnotation {
+		// Append extra annotations to converted image for harbor usage.
+		// FIXME: implement a containerd#converter.ConvertFunc to avoid creating the new manifest/index.
+		desc, err = annotation.Append(ctx, content, desc, annotation.Appended{
+			DriverName:    cvt.driver.Name(),
+			DriverVersion: cvt.driver.Version(),
+			SourceDigest:  content.Image().Target().Digest.String(),
+		})
+		if err != nil {
+			return errors.Wrap(err, "append annotations")
+		}
 	}
 	logger.Infof("converted image %s", target)
 
