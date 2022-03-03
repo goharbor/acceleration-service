@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/containerd/containerd/errdefs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -57,6 +58,10 @@ func moveFile(src, dst string) error {
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
 		return errors.Wrapf(err, "copy file %s to %s", src, dst)
+	}
+
+	if err := os.Remove(src); err != nil {
+		logrus.WithError(err).Warnf("failed to delete source file %s", src)
 	}
 
 	return nil
@@ -97,18 +102,22 @@ func (b *LocalFSBackend) Push(ctx context.Context, blobPath string) error {
 	return nil
 }
 
-func (b *LocalFSBackend) Check(blobID string) (bool, error) {
+func (b *LocalFSBackend) Check(blobID string) (string, error) {
 	dstPath := b.dstPath(blobID)
 
 	info, err := os.Stat(dstPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false, nil
+			return "", errdefs.ErrNotFound
 		}
-		return false, err
+		return "", err
 	}
 
-	return !info.IsDir(), nil
+	if !info.IsDir() {
+		return dstPath, nil
+	}
+
+	return "", errdefs.ErrNotFound
 }
 
 func (b *LocalFSBackend) Type() string {
