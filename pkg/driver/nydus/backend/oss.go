@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -160,9 +161,14 @@ func (b *OSSBackend) Push(ctx context.Context, blobPath string) error {
 	return nil
 }
 
-func (b *OSSBackend) Check(blobID string) (bool, error) {
+func (b *OSSBackend) Check(blobID string) (string, error) {
 	blobID = b.objectPrefix + blobID
-	return b.bucket.IsObjectExist(blobID)
+	if exist, err := b.bucket.IsObjectExist(blobID); err != nil {
+		return "", err
+	} else if exist {
+		return blobID, nil
+	}
+	return "", errdefs.ErrNotFound
 }
 
 func (b *OSSBackend) Type() string {

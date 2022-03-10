@@ -141,6 +141,18 @@ func (layer *BuildLayer) mountWithLower(ctx context.Context) error {
 }
 
 func (layer *BuildLayer) exportBlob(ctx context.Context, blobPath string) (*ocispec.Descriptor, error) {
+	blobID := path.Base(blobPath)
+
+	backend := layer.Backend(ctx)
+	if backend != nil {
+		if _, err := backend.Check(blobID); err != nil {
+			if err := backend.Push(ctx, blobPath); err != nil {
+				return nil, errors.Wrapf(err, "push nydus blob to backend %s", backend.Type())
+			}
+		}
+		return nil, nil
+	}
+
 	blobFile, err := os.Open(blobPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open blob %s", blobPath)
@@ -152,7 +164,6 @@ func (layer *BuildLayer) exportBlob(ctx context.Context, blobPath string) (*ocis
 		return nil, errors.Wrapf(err, "stat blob %s", blobPath)
 	}
 
-	blobID := path.Base(blobPath)
 	blobDigest := digest.NewDigestFromEncoded(digest.SHA256, blobID)
 	desc := ocispec.Descriptor{
 		Digest:    blobDigest,
@@ -164,14 +175,6 @@ func (layer *BuildLayer) exportBlob(ctx context.Context, blobPath string) (*ocis
 			utils.LayerAnnotationUncompressed: blobDigest.String(),
 			utils.LayerAnnotationNydusBlob:    "true",
 		},
-	}
-
-	backend := layer.Backend(ctx)
-	if backend != nil {
-		if err := backend.Push(ctx, blobPath); err != nil {
-			return nil, errors.Wrapf(err, "push nydus blob to backend %s", backend.Type())
-		}
-		return nil, nil
 	}
 
 	// FIXME: find a efficient way to use fifo to pipe blob data from builder to content store.

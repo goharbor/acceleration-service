@@ -28,8 +28,10 @@ const (
 type Backend interface {
 	// Push pushes specified blob file to remote storage backend.
 	Push(ctx context.Context, blobPath string) error
-	// Check checks whether a blob exists in remote storage backend.
-	Check(blobID string) (bool, error)
+	// Check checks whether a blob exists in remote storage backend,
+	// blob exists -> return (blobPath, nil)
+	// blob not exists -> return ("", err)
+	Check(blobID string) (string, error)
 	// Type returns backend type name.
 	Type() string
 }
