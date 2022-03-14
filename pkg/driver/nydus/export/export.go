@@ -105,11 +105,9 @@ func Export(ctx context.Context, content content.Provider, layers []packer.Descr
 
 	labels := map[string]string{}
 	labels["containerd.io/gc.ref.content.0"] = nydusConfigDesc.Digest.String()
-
-	for idx, blobDesc := range finalLayer.Blobs {
-		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+1)] = blobDesc.Digest.String()
+	for idx, desc := range descs {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+1)] = desc.Digest.String()
 	}
-	labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", len(finalLayer.Blobs)+1)] = finalLayer.Bootstrap.Digest.String()
 
 	if err := imageContent.WriteBlob(
 		ctx, content.ContentStore(), nydusManifestDesc.Digest.String(), bytes.NewReader(manifestBytes), *nydusManifestDesc, imageContent.WithLabels(labels),

@@ -89,7 +89,7 @@ func NewLocalConverter(cfg *config.Config) (*LocalConverter, error) {
 func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 	ctx, done, err := cvt.client.WithLease(ctx)
 	if err != nil {
-		return errors.Wrap(err, "create containerd lease")
+		return errors.Wrap(err, "create lease")
 	}
 	defer done(ctx)
 

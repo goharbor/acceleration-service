@@ -55,6 +55,8 @@ type Provider interface {
 	Snapshotter() snapshots.Snapshotter
 	// ContentStore gets the content store object of containerd.
 	ContentStore() content.Store
+	// Client gets the raw containerd client.
+	Client() *containerd.Client
 }
 
 type LocalProvider struct {
@@ -144,4 +146,8 @@ func (pvd *LocalProvider) Snapshotter() snapshots.Snapshotter {
 
 func (pvd *LocalProvider) ContentStore() content.Store {
 	return pvd.client.ContentStore()
+}
+
+func (pvd *LocalProvider) Client() *containerd.Client {
+	return pvd.client
 }
