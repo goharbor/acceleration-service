@@ -33,7 +33,11 @@ import (
 
 // Export exports all Nydus layer descriptors to a image manifest, then writes
 // to content store, and returns Nydus image manifest.
-func Export(ctx context.Context, content content.Provider, layers []packer.Descriptor) (*ocispec.Descriptor, error) {
+func Export(ctx context.Context, content content.Provider, layers []packer.Descriptor, hasBackend bool) (*ocispec.Descriptor, error) {
+	if len(layers) <= 0 {
+		return nil, fmt.Errorf("can't export image with empty layers")
+	}
+
 	// Export image config.
 	ociConfigDesc, err := content.Image().Config(ctx)
 	if err != nil {
@@ -51,25 +55,24 @@ func Export(ctx context.Context, content content.Provider, layers []packer.Descr
 	nydusConfig.History = []ocispec.History{}
 
 	descs := []ocispec.Descriptor{}
-	for idx := range layers {
-		layer := layers[idx]
+	finalLayer := layers[len(layers)-1]
 
-		// Append blob layer.
-		if layer.Blob != nil {
-			layerDiffID := digest.Digest(layer.Blob.Annotations[utils.LayerAnnotationUncompressed])
+	// Append blob layers.
+	if !hasBackend {
+		for _, blobDesc := range finalLayer.Blobs {
+			layerDiffID := digest.Digest(blobDesc.Annotations[utils.LayerAnnotationUncompressed])
 			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
-			delete(layer.Blob.Annotations, utils.LayerAnnotationUncompressed)
-			descs = append(descs, *layer.Blob)
-		}
-
-		// Append bootstrap layer.
-		if idx == len(layers)-1 {
-			layerDiffID := digest.Digest(layer.Bootstrap.Annotations[utils.LayerAnnotationUncompressed])
-			nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
-			delete(layer.Bootstrap.Annotations, utils.LayerAnnotationUncompressed)
-			descs = append(descs, layer.Bootstrap)
+			delete(blobDesc.Annotations, utils.LayerAnnotationUncompressed)
+			descs = append(descs, blobDesc)
 		}
 	}
+
+	// Append bootstrap layer.
+	layerDiffID := digest.Digest(finalLayer.Bootstrap.Annotations[utils.LayerAnnotationUncompressed])
+	nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+	delete(finalLayer.Bootstrap.Annotations, utils.LayerAnnotationUncompressed)
+	descs = append(descs, finalLayer.Bootstrap)
+
 	nydusConfigDesc, nydusConfigBytes, err := utils.MarshalToDesc(nydusConfig, ocispec.MediaTypeImageConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal image config")
@@ -102,18 +105,8 @@ func Export(ctx context.Context, content content.Provider, layers []packer.Descr
 
 	labels := map[string]string{}
 	labels["containerd.io/gc.ref.content.0"] = nydusConfigDesc.Digest.String()
-	for idx := range layers {
-		layer := layers[idx]
-		if layer.Blob == nil {
-			continue
-		}
-
-		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+1)] = layer.Blob.Digest.String()
-
-		// Append bootstrap layer.
-		if idx == len(layers)-1 {
-			labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+2)] = layer.Bootstrap.Digest.String()
-		}
+	for idx, desc := range descs {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx+1)] = desc.Digest.String()
 	}
 
 	if err := imageContent.WriteBlob(

@@ -22,6 +22,7 @@ import (
 	"path"
 
 	"github.com/containerd/containerd/content"
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -33,7 +34,7 @@ import (
 )
 
 type Descriptor struct {
-	Blob      *ocispec.Descriptor
+	Blobs     []ocispec.Descriptor
 	Bootstrap ocispec.Descriptor
 }
 
@@ -44,12 +45,19 @@ type Packer struct {
 	builderPath   string
 	rafsVersion   string
 	sg            singleflight.Group
+	cachedBlobs   map[digest.Digest]*ocispec.Descriptor
 }
 
 type Option struct {
 	WorkDir     string
 	BuilderPath string
 	RafsVersion string
+	ChunkDict   *ChunkDict
+}
+
+type ChunkDict struct {
+	BootstrapPath string
+	Blobs         map[string]ocispec.Descriptor
 }
 
 func New(option Option) (*Packer, error) {
@@ -57,7 +65,25 @@ func New(option Option) (*Packer, error) {
 		parentWorkDir: option.WorkDir,
 		builderPath:   option.BuilderPath,
 		rafsVersion:   option.RafsVersion,
+		cachedBlobs:   make(map[digest.Digest]*ocispec.Descriptor),
 	}, nil
+}
+
+func getDeltaBlobs(pre, cur []ocispec.Descriptor) []ocispec.Descriptor {
+	preMap := map[string]ocispec.Descriptor{}
+
+	for _, desc := range pre {
+		preMap[desc.Digest.String()] = desc
+	}
+
+	delta := []ocispec.Descriptor{}
+	for _, desc := range cur {
+		if _, ok := preMap[desc.Digest.String()]; !ok {
+			delta = append(delta, desc)
+		}
+	}
+
+	return delta
 }
 
 func (p *Packer) prepareWorkdir() (string, func() error, error) {
@@ -85,7 +111,7 @@ func (p *Packer) prepareWorkdir() (string, func() error, error) {
 	return workDir, cleanup, nil
 }
 
-func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildLayer, diffSkip *int) (*builder.Output, error) {
+func (p *Packer) diffBuild(ctx context.Context, workDir string, chunkDict *ChunkDict, layers []*BuildLayer, diffSkip *int) (*builder.Output, error) {
 	diffPaths := []string{}
 	diffHintPaths := []string{}
 
@@ -107,9 +133,9 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildL
 
 		// If err != nil, the cache should be considered miss and the error should
 		// be ignored in order not to affect the next workflow.
-		cachedBootstrap, _ := layer.GetCache(ctx, CompressionTypeBootstrap)
-		if cachedBootstrap == nil {
-			return nil, fmt.Errorf("can't find bootstrap cache")
+		cachedBootstrap, _, err := layer.GetCache(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("can't find cache")
 		}
 		ra, err := layer.ContentStore(ctx).ReaderAt(ctx, ocispec.Descriptor{
 			Digest: cachedBootstrap.Digest,
@@ -127,8 +153,13 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildL
 	}
 
 	build := builder.New(p.builderPath)
+	var chunkDictPath *string
+	if chunkDict != nil {
+		chunkDictPath = &chunkDict.BootstrapPath
+	}
 	output, err := build.Run(builder.Option{
 		BootstrapDirPath:    bootstrapDir,
+		ChunkDictPath:       chunkDictPath,
 		BlobDirPath:         blobDir,
 		ParentBootstrapPath: parentBootstrapPath,
 
@@ -146,7 +177,7 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, layers []*BuildL
 	return output, nil
 }
 
-func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error) {
+func (p *Packer) Build(ctx context.Context, chunkDict *ChunkDict, layers []Layer) ([]Descriptor, error) {
 	var diffSkip *int
 	var parent *BuildLayer
 
@@ -165,15 +196,14 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 
 		// If err != nil, the cache should be considered miss and the error should
 		// be ignored in order not to affect the next workflow.
-		cachedBootstrapDesc, _ := layer.GetCache(ctx, CompressionTypeBootstrap)
-
-		// If err == nil and desc == nil, means cache hit, but nydus blob content
-		// is empty in this layer.
-		cachedBlobDesc, err := layer.GetCache(ctx, CompressionTypeBlob)
-		if cachedBootstrapDesc != nil && err == nil {
+		cachedBootstrapDesc, cachedBlobDescs, err := layer.GetCache(ctx)
+		if err == nil {
 			descs[idx] = Descriptor{
-				Blob:      cachedBlobDesc,
+				Blobs:     cachedBlobDescs,
 				Bootstrap: *cachedBootstrapDesc,
+			}
+			for _, blob := range cachedBlobDescs {
+				p.cachedBlobs[blob.Digest] = &blob
 			}
 			if parent == nil || diffSkip != nil {
 				_idx := idx
@@ -244,7 +274,7 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 	}()
 
 	// Call nydus builder to build, skip the layers before `diffSkip`.
-	output, err := p.diffBuild(ctx, workDir, buildLayers, diffSkip)
+	output, err := p.diffBuild(ctx, workDir, chunkDict, buildLayers, diffSkip)
 	if err != nil {
 		return nil, errors.Wrap(err, "diff build with nydus")
 	}
@@ -255,66 +285,80 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 		base = *diffSkip + 1
 	}
 
+	if len(output.Artifacts) <= 0 {
+		return nil, fmt.Errorf("can't find valid nydus bootstrap")
+	}
+
 	// Export nydus blobs to content store.
 	exportEg, ctx := errgroup.WithContext(ctx)
-	for idx := range output.OrderedBlobs {
+	for idx := range output.Artifacts {
 		exportEg.Go(func(idx int) func() error {
 			return func() error {
-				blob := output.OrderedBlobs[idx]
-
-				// Skip to export empty nydus blob.
-				if blob == nil {
-					layer := buildLayers[idx]
-					if err := layer.SetCache(ctx, CompressionTypeBlob, nil); err != nil {
-						return errors.Wrap(err, "set nydus blob cache")
-					}
-					return nil
-				}
-
 				// Skip to export cached nydus blobs.
 				if idx < base {
 					return nil
 				}
 
-				blobPath := path.Join(workDir, "blobs", blob.BlobID)
-				layer := buildLayers[idx]
+				artifact := output.Artifacts[idx]
+				descs[idx].Blobs = make([]ocispec.Descriptor, len(artifact.Blobs))
 
-				// Use singleflight to deduplicate the export of same blob.
-				_desc, err, _ := p.sg.Do(blob.BlobID, func() (interface{}, error) {
-					return layer.exportBlob(ctx, blobPath)
-				})
-				if err != nil {
-					return errors.Wrap(err, "export nydus blob")
-				}
+				for blobIdx := range artifact.Blobs {
+					exportEg.Go(func(blobIdx int) func() error {
+						return func() error {
+							blobID := artifact.Blobs[blobIdx].BlobID
 
-				desc := _desc.(*ocispec.Descriptor)
-				if err := layer.SetCache(ctx, CompressionTypeBlob, desc); err != nil {
-					return errors.Wrap(err, "set nydus blob cache")
+							// Deduplicate the export of blob in chunk dict image.
+							if chunkDict != nil {
+								if desc, ok := chunkDict.Blobs[blobID]; ok {
+									descs[idx].Blobs[blobIdx] = desc
+									return nil
+								}
+							}
+
+							// Deduplicate the export of cached blob.
+							blobDigest := digest.NewDigestFromHex(string(digest.SHA256), blobID)
+							if desc, ok := p.cachedBlobs[blobDigest]; ok {
+								descs[idx].Blobs[blobIdx] = *desc
+								return nil
+							}
+
+							// Use singleflight to deduplicate the export of same blob.
+							blobPath := path.Join(workDir, "blobs", blobID)
+							layer := buildLayers[idx]
+							_desc, err, _ := p.sg.Do(blobID, func() (interface{}, error) {
+								return layer.exportBlob(ctx, blobPath)
+							})
+							if err != nil {
+								return errors.Wrap(err, "export nydus blob")
+							}
+
+							desc := _desc.(*ocispec.Descriptor)
+							if desc == nil {
+								return nil
+							}
+							descs[idx].Blobs[blobIdx] = *desc
+
+							return nil
+						}
+					}(blobIdx))
 				}
-				descs[idx].Blob = desc
 
 				return nil
 			}
 		}(idx))
 	}
 
-	if len(output.Bootstraps) <= 0 {
-		return nil, fmt.Errorf("can't find valid nydus bootstrap")
-	}
-
 	// Export nydus bootstraps to content store.
-	for idx, bootstrapName := range output.Bootstraps {
-		idx := base + idx
-		bootstrapPath := path.Join(workDir, "bootstraps", bootstrapName)
+	for idx := range output.Artifacts {
+		artifact := output.Artifacts[idx]
+		bootstrapPath := path.Join(workDir, "bootstraps", artifact.BootstrapName)
 		exportEg.Go(func(idx int) func() error {
 			return func() error {
+				idx := base + idx
 				layer := buildLayers[idx]
 				desc, err := layer.exportBootstrap(ctx, &p.sg, bootstrapPath)
 				if err != nil {
 					return errors.Wrap(err, "export nydus blob")
-				}
-				if err := layer.SetCache(ctx, CompressionTypeBootstrap, desc); err != nil {
-					return errors.Wrap(err, "set nydus bootstrap cache")
 				}
 				descs[idx].Bootstrap = *desc
 				return nil
@@ -325,6 +369,21 @@ func (p *Packer) Build(ctx context.Context, layers []Layer) ([]Descriptor, error
 	// Wait to export all nydus blobs/bootstraps.
 	if err := exportEg.Wait(); err != nil {
 		return nil, errors.Wrap(err, "export all nydus blobs")
+	}
+
+	// Set nydus bootstraps/blobs to cache.
+	for idx := range output.Artifacts {
+		idx := base + idx
+		pre := []ocispec.Descriptor{}
+		if idx >= 1 {
+			pre = descs[idx-1].Blobs
+		}
+		delta := getDeltaBlobs(pre, descs[idx].Blobs)
+
+		layer := buildLayers[idx]
+		if err := layer.SetCache(ctx, descs[idx].Bootstrap, delta); err != nil {
+			return nil, errors.Wrap(err, "set nydus bootstrap cache")
+		}
 	}
 
 	return descs, nil

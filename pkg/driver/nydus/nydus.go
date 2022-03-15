@@ -37,16 +37,19 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/export"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/packer"
+	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 )
 
 const supportedOS = "linux"
 
 type Driver struct {
+	workDir       string
 	backend       backend.Backend
 	packer        *packer.Packer
 	mergeManifest bool
 	rafsVersion   string
+	chunkDictRef  string
 }
 
 func New(cfg map[string]string) (*Driver, error) {
@@ -70,6 +73,8 @@ func New(cfg map[string]string) (*Driver, error) {
 			return nil, fmt.Errorf("invalid merge_manifest option")
 		}
 	}
+
+	chunkDictRef := cfg["chunk_dict_ref"]
 
 	var _backend backend.Backend
 	backendType := cfg["backend_type"]
@@ -96,10 +101,12 @@ func New(cfg map[string]string) (*Driver, error) {
 	}
 
 	return &Driver{
+		workDir:       workDir,
 		packer:        p,
 		backend:       _backend,
 		mergeManifest: mergeManifest,
 		rafsVersion:   rafsVersion,
+		chunkDictRef:  chunkDictRef,
 	}, nil
 }
 
@@ -129,6 +136,41 @@ func (nydus *Driver) makeManifestIndex(ctx context.Context, content content.Prov
 	return indexDesc, nil
 }
 
+func (nydus *Driver) getChunkDict(ctx context.Context, content content.Provider) (*packer.ChunkDict, error) {
+	if nydus.chunkDictRef == "" {
+		return nil, nil
+	}
+
+	parser, err := parser.New(content)
+	if err != nil {
+		return nil, errors.Wrap(err, "create chunk dict parser")
+	}
+	bootstrapReader, blobs, err := parser.PullAsChunkDict(ctx, nydus.chunkDictRef)
+	if err != nil {
+		return nil, errors.Wrapf(err, "pull chunk dict image %s", nydus.chunkDictRef)
+	}
+	defer bootstrapReader.Close()
+
+	bootstrapFile, err := os.CreateTemp(nydus.workDir, "nydus-chunk-dict-")
+	if err != nil {
+		return nil, errors.Wrapf(err, "create temp file for chunk dict bootstrap")
+	}
+	defer bootstrapFile.Close()
+
+	bootstrapPath := bootstrapFile.Name()
+	// FIXME: avoid to unpack the boostrap on every conversion.
+	if err := utils.UnpackFile(imageContent.NewReader(bootstrapReader), utils.BootstrapFileNameInLayer, bootstrapFile.Name()); err != nil {
+		return nil, errors.Wrap(err, "unpack nydus bootstrap")
+	}
+
+	chunkDict := packer.ChunkDict{
+		BootstrapPath: bootstrapPath,
+		Blobs:         blobs,
+	}
+
+	return &chunkDict, nil
+}
+
 func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content content.Provider) (*ocispec.Descriptor, error) {
 	diffIDs, err := content.Image().RootFS(ctx)
 	if err != nil {
@@ -150,12 +192,21 @@ func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content 
 		})
 	}
 
-	nydusLayers, err := nydus.packer.Build(ctx, layers)
+	chunkDict, err := nydus.getChunkDict(ctx, content)
+	if err != nil {
+		return nil, errors.Wrap(err, "get chunk dict")
+	}
+	if chunkDict != nil {
+		defer os.Remove(chunkDict.BootstrapPath)
+	}
+
+	nydusLayers, err := nydus.packer.Build(ctx, chunkDict, layers)
 	if err != nil {
 		return nil, errors.Wrap(err, "build nydus image")
 	}
 
-	desc, err := export.Export(ctx, content, nydusLayers)
+	hasBackend := nydus.backend != nil
+	desc, err := export.Export(ctx, content, nydusLayers, hasBackend)
 	if err != nil {
 		return nil, errors.Wrap(err, "export nydus manifest")
 	}

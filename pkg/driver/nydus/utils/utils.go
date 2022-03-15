@@ -104,3 +104,20 @@ func (c ExcludeNydusPlatformComparer) Match(platform ocispec.Platform) bool {
 func (c ExcludeNydusPlatformComparer) Less(a, b ocispec.Platform) bool {
 	return c.MatchComparer.Less(a, b)
 }
+
+type NydusPlatformComparer struct {
+	platforms.MatchComparer
+}
+
+func (c NydusPlatformComparer) Match(platform ocispec.Platform) bool {
+	for _, key := range platform.OSFeatures {
+		if key == ManifestOSFeatureNydus {
+			return true
+		}
+	}
+	return false
+}
+
+func (c NydusPlatformComparer) Less(a, b ocispec.Platform) bool {
+	return c.MatchComparer.Less(a, b)
+}

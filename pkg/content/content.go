@@ -39,6 +39,8 @@ var logger = logrus.WithField("module", "content")
 // Provider provides necessary image utils, image content
 // store for image conversion.
 type Provider interface {
+	// Resolve attempts to resolve the reference into a name and descriptor.
+	Resolver(ctx context.Context, ref string) (remotes.Resolver, error)
 	// Pull pulls source image from remote registry by specified reference.
 	// This pulls all platforms of the image but Image() returns containerd.Image for
 	// the default platoform.
@@ -53,6 +55,8 @@ type Provider interface {
 	Snapshotter() snapshots.Snapshotter
 	// ContentStore gets the content store object of containerd.
 	ContentStore() content.Store
+	// Client gets the raw containerd client.
+	Client() *containerd.Client
 }
 
 type LocalProvider struct {
@@ -72,7 +76,7 @@ func NewLocalProvider(
 	}, nil
 }
 
-func (pvd *LocalProvider) getResolver(ctx context.Context, ref string) (remotes.Resolver, error) {
+func (pvd *LocalProvider) Resolver(ctx context.Context, ref string) (remotes.Resolver, error) {
 	refURL, err := url.Parse(fmt.Sprintf("dummy://%s", ref))
 	if err != nil {
 		return nil, errors.Wrap(err, "parse reference of source image")
@@ -89,7 +93,7 @@ func (pvd *LocalProvider) getResolver(ctx context.Context, ref string) (remotes.
 }
 
 func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
-	resolver, err := pvd.getResolver(ctx, ref)
+	resolver, err := pvd.Resolver(ctx, ref)
 	if err != nil {
 		return errors.Wrapf(err, "get resolver for %s", ref)
 	}
@@ -123,7 +127,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 }
 
 func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref string) error {
-	resolver, err := pvd.getResolver(ctx, ref)
+	resolver, err := pvd.Resolver(ctx, ref)
 	if err != nil {
 		return errors.Wrapf(err, "get resolver for %s", ref)
 	}
@@ -142,4 +146,8 @@ func (pvd *LocalProvider) Snapshotter() snapshots.Snapshotter {
 
 func (pvd *LocalProvider) ContentStore() content.Store {
 	return pvd.client.ContentStore()
+}
+
+func (pvd *LocalProvider) Client() *containerd.Client {
+	return pvd.client
 }
