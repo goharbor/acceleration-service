@@ -98,8 +98,8 @@ func (layer *BuildLayer) umount(ctx context.Context) {
 	layer.mounts = nil
 }
 
-func (layer *BuildLayer) mountWithLower(ctx context.Context) error {
-	mountDone := make(chan error)
+func (layer *BuildLayer) mountWithLower(ctx context.Context, flatten bool) error {
+	mountDone := make(chan error, 1)
 	layer.mountRelease = make(chan bool)
 
 	lower := []mount.Mount{}
@@ -113,14 +113,18 @@ func (layer *BuildLayer) mountWithLower(ctx context.Context) error {
 			return mount.WithTempMount(ctx, upper, func(upperRoot string) error {
 				// FIXME: for non-overlay snapshotter, we can't use diff hint feature,
 				// need fallback to non-hint mode.
-				upperSnapshot, err := GetUpperdir(lower, upper)
-				if err != nil {
-					err = errors.Wrap(err, "get upper directory from mount")
-					mountDone <- err
-					return err
+				if !flatten {
+					upperSnapshot, err := GetUpperdir(lower, upper)
+					if err != nil {
+						err = errors.Wrap(err, "get upper directory from mount")
+						mountDone <- err
+						return err
+					}
+					layer.diffHintPath = upperSnapshot
+				} else {
+					layer.diffHintPath = upperRoot
 				}
 				layer.diffPath = upperRoot
-				layer.diffHintPath = upperSnapshot
 				mountDone <- nil
 				<-layer.mountRelease
 				return nil
