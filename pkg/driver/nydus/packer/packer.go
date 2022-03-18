@@ -334,7 +334,11 @@ func (p *Packer) Build(ctx context.Context, chunkDict *ChunkDict, layers []Layer
 
 							desc := _desc.(*ocispec.Descriptor)
 							if desc == nil {
-								return nil
+								// Handle the case which backend is specified, just fill digest
+								// for the use on following workflow.
+								desc = &ocispec.Descriptor{
+									Digest: blobDigest,
+								}
 							}
 							descs[idx].Blobs[blobIdx] = *desc
 
