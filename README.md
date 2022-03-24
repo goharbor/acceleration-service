@@ -123,3 +123,35 @@ INFO[2022-01-28T03:39:29.561103924Z] converted image 192.168.1.1/library/nginx:l
 INFO[2022-01-28T03:39:29.561197593Z] pushing image 192.168.1.1/library/nginx:latest-nydus  module=converter
 INFO[2022-01-28T03:39:29.587585066Z] pushed image 192.168.1.1/library/nginx:latest-nydus  module=converter
 ```
+
+## Driver
+
+### Interface
+
+Acceleration Service Framework provides a built-in extensible method called driver, which allows the integration of various types of accelerated image format conversions, the framework will automatically handle operations such as pulling source image and pushing converted image
+, the format providers need to implement the following interface in [pkg/driver](./pkg/driver):
+
+```golang
+// Driver defines image conversion interface, the following
+// methods need to be implemented by image format providers.
+type Driver interface {
+	// Convert converts the source image to target image, where
+	// content parameter provides necessary image utils, image
+	// content store and so on. If conversion successful, the
+	// converted image manifest will be returned, otherwise a
+	// non-nil error will be returned.
+	Convert(context.Context, content.Provider) (*ocispec.Descriptor, error)
+
+	// Name gets the driver type name, it is used to identify
+	// different accelerated image formats.
+	Name() string
+
+	// Version gets the driver version, it is used to identify
+	// different accelerated image format versions with same driver.
+	Version() string
+}
+```
+
+### Testing
+
+We can specify the driver name by modifying `converter.driver` in the configuration file, and modify the fields in `converter.config` to specify the driver-related configuration, see [example configuration file](./misc/config/config.yaml.estargz.tmpl).
