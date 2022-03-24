@@ -49,6 +49,7 @@ type Driver struct {
 	packer        *packer.Packer
 	mergeManifest bool
 	rafsVersion   string
+	flatten       bool
 	chunkDictRef  string
 }
 
@@ -91,10 +92,19 @@ func New(cfg map[string]string) (*Driver, error) {
 		rafsVersion = "5"
 	}
 
+	flatten := false
+	if cfg["flatten"] != "" {
+		flatten, err = strconv.ParseBool(cfg["flatten"])
+		if err != nil {
+			return nil, fmt.Errorf("invalid flatten option")
+		}
+	}
+
 	p, err := packer.New(packer.Option{
 		WorkDir:     workDir,
 		BuilderPath: builderPath,
 		RafsVersion: rafsVersion,
+		Flatten:     flatten,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "create nydus packer")
@@ -106,6 +116,7 @@ func New(cfg map[string]string) (*Driver, error) {
 		backend:       _backend,
 		mergeManifest: mergeManifest,
 		rafsVersion:   rafsVersion,
+		flatten:       flatten,
 		chunkDictRef:  chunkDictRef,
 	}, nil
 }
@@ -190,6 +201,10 @@ func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content 
 			cs:      content.ContentStore(),
 			backend: nydus.backend,
 		})
+	}
+
+	if nydus.flatten && len(src.Layers) > 0 {
+		layers = layers[len(layers)-1:]
 	}
 
 	chunkDict, err := nydus.getChunkDict(ctx, content)
