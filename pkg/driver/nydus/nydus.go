@@ -182,10 +182,10 @@ func (nydus *Driver) getChunkDict(ctx context.Context, content content.Provider)
 	return &chunkDict, nil
 }
 
-func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content content.Provider) (*ocispec.Descriptor, error) {
+func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content content.Provider) (*ocispec.Descriptor, *ocispec.Descriptor, error) {
 	diffIDs, err := content.Image().RootFS(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "get diff ids from containerd")
+		return nil, nil, errors.Wrap(err, "get diff ids from containerd")
 	}
 
 	layers := []packer.Layer{}
@@ -209,7 +209,7 @@ func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content 
 
 	chunkDict, err := nydus.getChunkDict(ctx, content)
 	if err != nil {
-		return nil, errors.Wrap(err, "get chunk dict")
+		return nil, nil, errors.Wrap(err, "get chunk dict")
 	}
 	if chunkDict != nil {
 		defer os.Remove(chunkDict.BootstrapPath)
@@ -217,16 +217,21 @@ func (nydus *Driver) convert(ctx context.Context, src ocispec.Manifest, content 
 
 	nydusLayers, err := nydus.packer.Build(ctx, chunkDict, layers)
 	if err != nil {
-		return nil, errors.Wrap(err, "build nydus image")
+		return nil, nil, errors.Wrap(err, "build nydus image")
 	}
 
 	hasBackend := nydus.backend != nil
-	desc, err := export.Export(ctx, content, nydusLayers, hasBackend)
+	desc, err := export.Export(ctx, content, nydusLayers, hasBackend, true)
 	if err != nil {
-		return nil, errors.Wrap(err, "export nydus manifest")
+		return nil, nil, errors.Wrap(err, "export nydus manifest")
 	}
 
-	return desc, nil
+	compactDesc, err := export.Export(ctx, content, nydusLayers, hasBackend, false)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "export nydus manifest")
+	}
+
+	return desc, compactDesc, nil
 }
 
 func (nydus *Driver) Convert(ctx context.Context, content content.Provider) (*ocispec.Descriptor, error) {
@@ -284,7 +289,7 @@ func (nydus *Driver) Convert(ctx context.Context, content content.Provider) (*oc
 			targetDescs = append(targetDescs, srcDesc)
 		}
 
-		nydusDesc, err := nydus.convert(ctx, manifest, content)
+		nydusDesc, nydusCompactDesc, err := nydus.convert(ctx, manifest, content)
 		if err != nil {
 			return nil, errors.Wrapf(err, "convert for platform %v", platform)
 		}
@@ -296,6 +301,17 @@ func (nydus *Driver) Convert(ctx context.Context, content content.Provider) (*oc
 			nydusDesc.Platform.OSFeatures = []string{utils.ManifestOSFeatureNydus}
 		}
 
+		if nydusCompactDesc.Platform == nil {
+			newPlatform := ocispec.Platform{}
+			newPlatform.Architecture = platform.Architecture
+			newPlatform.OS = platform.OS
+			nydusCompactDesc.Platform = &newPlatform
+		}
+		targetDescs = append(targetDescs, *nydusCompactDesc)
+		if nydusDesc.Platform == nil {
+			nydusDesc.Platform = platform
+		}
+		nydusDesc.Platform.OSFeatures = []string{utils.ManifestOSFeatureNydus}
 		targetDescs = append(targetDescs, *nydusDesc)
 	}
 
