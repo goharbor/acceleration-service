@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build_image:
+    runs-on: ubuntu-20.04
+    env:
+      GO_VERSION: 1.17
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Install Golang
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Build Image
+      run: |
+        TAG=$GITHUB_REF_NAME
+        docker build -t goharbor/harbor-acceld:$TAG -f script/release/Dockerfile .
+
+    - name: Test Image
+      # Enable tty for docker
+      shell: 'script -q -e -c "bash {0}"'
+      run: |
+        TAG=$GITHUB_REF_NAME
+        docker run -v $PWD/misc/config/config.yaml.nydus.tmpl:/etc/acceld-config.yaml -it -d --rm -p 2077:2077 goharbor/harbor-acceld:$TAG /etc/acceld-config.yaml
+        sleep 5
+        curl -f http://127.0.0.1:2077/api/v1/health
+
+    - name: Login Registry
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+    - name: Push Image
+      run: |
+        TAG=$GITHUB_REF_NAME
+        # Only push for non pull_request
+        if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+          docker push goharbor/harbor-acceld:$TAG
+        fi
+
+  release_binary:
+    runs-on: ubuntu-20.04
+    env:
+      GO_VERSION: 1.17
+      OUTPUT_DIR: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Cache Go Mod
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go
+      - name: Run Linter
+        run: |
+          make install-check-tools
+          make check
+      - name: Build Binary
+        run: |
+          make
+      - name: Pack Binary
+        run: |
+          TAG=$GITHUB_REF_NAME
+          TARGZ_FILE="harbor-acceld-$TAG-linux-amd64.tgz"
+          SHA256SUM_FILE="harbor-acceld-$TAG-linux-amd64.tgz.sha256sum"
+          mkdir $OUTPUT_DIR && mkdir harbor-acceld && mv acceld harbor-acceld/. && mv accelctl harbor-acceld/.
+          tar cf - harbor-acceld | gzip > $OUTPUT_DIR/${TARGZ_FILE}
+          sha256sum $OUTPUT_DIR/${TARGZ_FILE} > $OUTPUT_DIR/${SHA256SUM_FILE}
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: harbor-acceld-artifacts
+          path: |
+            ${{ env.OUTPUT_DIR }}
+
+  upload_binary:
+    runs-on: ubuntu-20.04
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/out
+    needs: [release_binary]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: harbor-acceld-artifacts
+          path: |
+            ${{ env.OUTPUT_DIR }}
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$GITHUB_REF_NAME
+          cat <<EOF > ${GITHUB_WORKSPACE}/release-note.txt
+          Acceleration Service ${TAG} Release
+
+          (TBD)
+          EOF
+          ASSET_FLAGS=()
+          for F in ${OUTPUT_DIR}/* ; do
+            ASSET_FLAGS+=("-a" "$F")
+          done
+          hub release create "${ASSET_FLAGS[@]}" -F ${GITHUB_WORKSPACE}/release-note.txt --draft $TAG
