@@ -27,3 +27,6 @@ smoke: default
 
 # Run testing 
 test: default ut smoke
+
+release-image:
+	docker build -t goharbor/harbor-acceld -f script/release/Dockerfile .
