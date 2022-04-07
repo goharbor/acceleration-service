@@ -223,3 +223,22 @@ GET /api/v1/conversions
 | ------ | -------------------------------------------- |
 | 200    | Return task list                             |
 | 401    | Unauthorized, invalid `Authorization` header |
+
+### Check Healthy
+
+#### Request
+
+```
+GET /api/v1/health
+```
+
+#### Response
+
+```
+Ok
+```
+
+| Status | Description                 |
+| ------ | --------------------------- |
+| 200    | Accled service is healthy   |
+| 500    | Accled service is unhealthy |

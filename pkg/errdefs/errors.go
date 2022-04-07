@@ -15,4 +15,5 @@ var (
 	ErrUnauthorized     = errors.New("ERR_UNAUTHORIZED")
 	ErrConvertFailed    = errors.New("ERR_CONVERT_FAILED")
 	ErrAlreadyConverted = errors.New("ERR_ALREADY_CONVERTED")
+	ErrUnhealthy        = errors.New("ERR_UNHEALTHY")
 )

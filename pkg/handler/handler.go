@@ -17,12 +17,15 @@ package handler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/converter"
 )
+
+const healthCheckTimeout = time.Second * 5
 
 // Handler for handling HTTP requests.
 type Handler interface {
@@ -34,6 +37,9 @@ type Handler interface {
 	// if the sync option is specified, the HTTP request will be
 	// blocked until the conversion is complete.
 	Convert(ctx context.Context, ref string, sync bool) error
+	// CheckHealth checks the acceld service is healthy and can serve
+	// webhook request.
+	CheckHealth(ctx context.Context) error
 }
 
 type LocalHandler struct {
@@ -70,4 +76,10 @@ func (handler *LocalHandler) Auth(ctx context.Context, host string, authHeader s
 
 func (handler *LocalHandler) Convert(ctx context.Context, ref string, sync bool) error {
 	return handler.cvt.Dispatch(ctx, ref, sync)
+}
+
+func (handler *LocalHandler) CheckHealth(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
+	defer cancel()
+	return handler.cvt.CheckHealth(ctx)
 }
