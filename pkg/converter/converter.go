@@ -16,6 +16,7 @@ package converter
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/snapshots"
@@ -39,6 +40,10 @@ type Converter interface {
 	// asynchronous, and if the sync option is specified,
 	// Dispatch will be blocked until the conversion is complete.
 	Dispatch(ctx context.Context, ref string, sync bool) error
+	// CheckHealth checks the containerd client can successfully
+	// connect to the containerd daemon and the healthcheck service
+	// returns the SERVING response.
+	CheckHealth(ctx context.Context) error
 }
 
 type LocalConverter struct {
@@ -164,6 +169,21 @@ func (cvt *LocalConverter) Dispatch(ctx context.Context, ref string, sync bool) 
 			return err
 		}, "convert")
 	})
+
+	return nil
+}
+
+func (cvt *LocalConverter) CheckHealth(ctx context.Context) error {
+	health, err := cvt.client.IsServing(ctx)
+
+	msg := "containerd service is unhealthy"
+	if err != nil {
+		return errors.Wrap(err, msg)
+	}
+
+	if !health {
+		return fmt.Errorf(msg)
+	}
 
 	return nil
 }
