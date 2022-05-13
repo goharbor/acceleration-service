@@ -65,8 +65,7 @@ func Export(ctx context.Context, content content.Provider, layers []packer.Descr
 			continue
 		}
 		descs = append(descs, blobDesc)
-		layerDiffID := digest.Digest(blobDesc.Annotations[utils.LayerAnnotationUncompressed])
-		nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, layerDiffID)
+		nydusConfig.RootFS.DiffIDs = append(nydusConfig.RootFS.DiffIDs, blobDesc.Digest)
 		// Remove unnecessary diff id annotation in final manifest.
 		delete(blobDesc.Annotations, utils.LayerAnnotationUncompressed)
 	}
