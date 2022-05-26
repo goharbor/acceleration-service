@@ -224,6 +224,18 @@ func (layer *BuildLayer) exportBootstrap(ctx context.Context, sg *singleflight.G
 			},
 		}
 
+		if layer.rafsVersion == "6" {
+			reader, err := utils.GetRawBootstrapFromV6(bootstrapFile)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get raw bootstrap")
+			}
+			sha, err := digest.FromReader(reader)
+			if err != nil {
+				return nil, errors.Wrap(err, "calculate raw bootstrap digest")
+			}
+			desc.Annotations[utils.LayerAnnotationNydusBootstrapDigest] = sha.String()
+		}
+
 		reader, err := utils.PackTargz(bootstrapPath, utils.BootstrapFileNameInLayer, true)
 		if err != nil {
 			return nil, errors.Wrap(err, "pack bootstrap to tar.gz")

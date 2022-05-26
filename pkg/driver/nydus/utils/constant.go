@@ -19,12 +19,12 @@ const (
 	MediaTypeNydusBlob       = "application/vnd.oci.image.layer.nydus.blob.v1"
 	BootstrapFileNameInLayer = "image/image.boot"
 
-	LayerAnnotationNydusBlob        = "containerd.io/snapshot/nydus-blob"
-	LayerAnnotationNydusBootstrap   = "containerd.io/snapshot/nydus-bootstrap"
-	LayerAnnotationNydusRAFSVersion = "containerd.io/snapshot/nydus-rafs-version"
-	LayerAnnotationNydusBlobIDs     = "containerd.io/snapshot/nydus-blob-ids"
-
-	LayerAnnotationUncompressed = "containerd.io/uncompressed"
+	LayerAnnotationNydusBlob            = "containerd.io/snapshot/nydus-blob"
+	LayerAnnotationNydusBootstrap       = "containerd.io/snapshot/nydus-bootstrap"
+	LayerAnnotationNydusRAFSVersion     = "containerd.io/snapshot/nydus-rafs-version"
+	LayerAnnotationNydusBlobIDs         = "containerd.io/snapshot/nydus-blob-ids"
+	LayerAnnotationNydusBootstrapDigest = "containerd.io/snapshot/nydus-bootstrap-digest"
+	LayerAnnotationUncompressed         = "containerd.io/uncompressed"
 )
 
 var NydusAnnotations = []string{LayerAnnotationNydusBlob, LayerAnnotationNydusBootstrap, LayerAnnotationNydusRAFSVersion}
