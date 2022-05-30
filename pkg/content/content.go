@@ -98,7 +98,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		return errors.Wrapf(err, "get resolver for %s", ref)
 	}
 
-	// TODO: enable to configure the target platforms.
+	// TODO: enable configuring the target platforms.
 	platformMatcher := nydusUtils.ExcludeNydusPlatformComparer{MatchComparer: platforms.All}
 
 	opts := []containerd.RemoteOpt{
