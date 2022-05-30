@@ -169,7 +169,7 @@ func (nydus *Driver) getChunkDict(ctx context.Context, content content.Provider)
 	defer bootstrapFile.Close()
 
 	bootstrapPath := bootstrapFile.Name()
-	// FIXME: avoid to unpack the boostrap on every conversion.
+	// FIXME: avoid unpacking the bootstrap on every conversion.
 	if err := utils.UnpackFile(imageContent.NewReader(bootstrapReader), utils.BootstrapFileNameInLayer, bootstrapFile.Name()); err != nil {
 		return nil, errors.Wrap(err, "unpack nydus bootstrap")
 	}

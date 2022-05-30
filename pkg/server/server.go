@@ -56,7 +56,7 @@ func NewHTTPServer(cfg *config.ServerConfig, metricCfg *config.MetricConfig, rou
 	server.HideBanner = true
 	server.HidePort = true
 
-	// Enforce all meddlewares to use our logger.
+	// Force all middlewares to use our logger.
 	server.Logger.(*log.Logger).SetOutput(logger.Writer())
 
 	// Handle internal error in API handler that is not visible to user.
@@ -131,7 +131,7 @@ func NewHTTPServer(cfg *config.ServerConfig, metricCfg *config.MetricConfig, rou
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, os.Interrupt)
 		<-quit
-		logrus.Infof("[%s] gracefully shutdowning http server...", cfg.Name)
+		logrus.Infof("[%s] gracefully shutting down http server...", cfg.Name)
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
