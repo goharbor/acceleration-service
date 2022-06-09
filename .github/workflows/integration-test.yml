@@ -44,11 +44,11 @@ jobs:
 
     - name: Test Nydus Driver
       run: |
-        NYDUS_VERSION=2.0.0-rc.1
+        NYDUS_VERSION=v2.0.1
 
         # Download nydus components
-        wget https://github.com/dragonflyoss/image-service/releases/download/v$NYDUS_VERSION/nydus-static-v$NYDUS_VERSION-x86_64.tgz
-        tar xzvf nydus-static-v$NYDUS_VERSION-x86_64.tgz
+        wget https://github.com/dragonflyoss/image-service/releases/download/$NYDUS_VERSION/nydus-static-$NYDUS_VERSION-linux-amd64.tgz
+        tar xzvf nydus-static-$NYDUS_VERSION-linux-amd64.tgz
         mkdir -p /usr/bin
         sudo mv nydus-static/nydus-image nydus-static/nydusd-fusedev nydus-static/nydusify /usr/bin/
         ./script/integration/nydus/test.sh ${{ env.OCI_IMAGE_NAME }}
