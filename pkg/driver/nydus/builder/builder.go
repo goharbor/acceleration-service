@@ -40,7 +40,8 @@ type Option struct {
 
 	OutputJSONPath string
 
-	RafsVersion string
+	RafsVersion    string
+	RafsCompressor string
 }
 
 type Builder struct {
@@ -90,6 +91,11 @@ func (builder *Builder) Run(option Option) (*Output, error) {
 		"--fs-version",
 		option.RafsVersion,
 	}
+
+	if option.RafsCompressor != "" {
+		args = append(args, "--compressor", option.RafsCompressor)
+	}
+
 	if option.RafsVersion != "" {
 		// FIXME: these options should be handled automatically in builder (nydus-image).
 		args = append(args, "--disable-check")
