@@ -46,6 +46,8 @@ converter:
       builder: nydus-image
       # specify nydus format version, possible values: `5`, `6` (EROFS-compatible), default is `5`
       rafs_version: 5
+      # specify nydus blob compression algorithm, possible values: `none`, `lz4_block`, `gzip`, `zstd`, default is `lz4_block`
+      # rafs_compressor: zstd
       # ensure that both OCIv1 manifest and nydus manifest are present as manifest index in the target image.
       # it's used for containerd to support running OCIv1 image or nydus image simultaneously with a single image reference.
       merge_manifest: false

@@ -91,6 +91,7 @@ func New(cfg map[string]string) (*Driver, error) {
 	if rafsVersion == "" {
 		rafsVersion = "5"
 	}
+	rafsCompressor := cfg["rafs_compressor"]
 
 	flatten := false
 	if cfg["flatten"] != "" {
@@ -101,10 +102,11 @@ func New(cfg map[string]string) (*Driver, error) {
 	}
 
 	p, err := packer.New(packer.Option{
-		WorkDir:     workDir,
-		BuilderPath: builderPath,
-		RafsVersion: rafsVersion,
-		Flatten:     flatten,
+		WorkDir:        workDir,
+		BuilderPath:    builderPath,
+		RafsVersion:    rafsVersion,
+		RafsCompressor: rafsCompressor,
+		Flatten:        flatten,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "create nydus packer")

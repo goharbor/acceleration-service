@@ -41,20 +41,22 @@ type Descriptor struct {
 // Packer implements the build workflow of nydus image, as well as
 // the export and import of build cache.
 type Packer struct {
-	parentWorkDir string
-	builderPath   string
-	rafsVersion   string
-	flatten       bool
-	sg            singleflight.Group
-	cachedBlobs   map[digest.Digest]*ocispec.Descriptor
+	parentWorkDir  string
+	builderPath    string
+	rafsVersion    string
+	rafsCompressor string
+	flatten        bool
+	sg             singleflight.Group
+	cachedBlobs    map[digest.Digest]*ocispec.Descriptor
 }
 
 type Option struct {
-	WorkDir     string
-	BuilderPath string
-	RafsVersion string
-	Flatten     bool
-	ChunkDict   *ChunkDict
+	WorkDir        string
+	BuilderPath    string
+	RafsVersion    string
+	RafsCompressor string
+	Flatten        bool
+	ChunkDict      *ChunkDict
 }
 
 type ChunkDict struct {
@@ -64,11 +66,12 @@ type ChunkDict struct {
 
 func New(option Option) (*Packer, error) {
 	return &Packer{
-		parentWorkDir: option.WorkDir,
-		builderPath:   option.BuilderPath,
-		rafsVersion:   option.RafsVersion,
-		cachedBlobs:   make(map[digest.Digest]*ocispec.Descriptor),
-		flatten:       option.Flatten,
+		parentWorkDir:  option.WorkDir,
+		builderPath:    option.BuilderPath,
+		rafsVersion:    option.RafsVersion,
+		rafsCompressor: option.RafsCompressor,
+		cachedBlobs:    make(map[digest.Digest]*ocispec.Descriptor),
+		flatten:        option.Flatten,
 	}, nil
 }
 
@@ -172,6 +175,7 @@ func (p *Packer) diffBuild(ctx context.Context, workDir string, chunkDict *Chunk
 
 		OutputJSONPath: outputJSONPath,
 		RafsVersion:    p.rafsVersion,
+		RafsCompressor: p.rafsCompressor,
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "build layers %v %v", diffPaths, diffHintPaths)
