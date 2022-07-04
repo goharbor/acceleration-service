@@ -122,8 +122,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 	}
 	pvd.image = containerd.NewImageWithPlatform(pvd.client, image, platformMatcher)
 
-	// Unpack the source image.
-	return pvd.image.Unpack(ctx, "")
+	return nil
 }
 
 func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref string) error {
