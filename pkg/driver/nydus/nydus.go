@@ -72,11 +72,19 @@ func New(cfg map[string]string) (*Driver, error) {
 		}
 	}
 
-	fsVersion := cfg["rafs_version"]
+	fsVersion := cfg["fs_version"]
 	if fsVersion == "" {
-		fsVersion = "5"
+		// For compatibility of older configuration.
+		fsVersion = cfg["rafs_version"]
+		if fsVersion == "" {
+			fsVersion = "5"
+		}
 	}
-	compressor := cfg["rafs_compressor"]
+	compressor := cfg["compressor"]
+	if compressor == "" {
+		// For compatibility of older configuration.
+		compressor = cfg["rafs_compressor"]
+	}
 
 	return &Driver{
 		workDir:      workDir,
