@@ -15,9 +15,11 @@
 package nydus
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
@@ -27,6 +29,7 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
 	"github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 
@@ -40,12 +43,13 @@ type chunkDictInfo struct {
 }
 
 type Driver struct {
-	workDir      string
-	builderPath  string
-	fsVersion    string
-	compressor   string
-	chunkDictRef string
-	backend      backend.Backend
+	workDir       string
+	builderPath   string
+	fsVersion     string
+	compressor    string
+	chunkDictRef  string
+	mergeManifest bool
+	backend       backend.Backend
 }
 
 func New(cfg map[string]string) (*Driver, error) {
@@ -86,13 +90,23 @@ func New(cfg map[string]string) (*Driver, error) {
 		compressor = cfg["rafs_compressor"]
 	}
 
+	_mergeManifest := cfg["merge_manifest"]
+	mergeManifest := false
+	if _mergeManifest != "" {
+		mergeManifest, err = strconv.ParseBool(_mergeManifest)
+		if err != nil {
+			return nil, fmt.Errorf("invalid merge_manifest option")
+		}
+	}
+
 	return &Driver{
-		workDir:      workDir,
-		builderPath:  builderPath,
-		fsVersion:    fsVersion,
-		compressor:   compressor,
-		chunkDictRef: chunkDictRef,
-		backend:      _backend,
+		workDir:       workDir,
+		builderPath:   builderPath,
+		fsVersion:     fsVersion,
+		compressor:    compressor,
+		chunkDictRef:  chunkDictRef,
+		mergeManifest: mergeManifest,
+		backend:       _backend,
 	}, nil
 }
 
@@ -105,6 +119,14 @@ func (d *Driver) Version() string {
 }
 
 func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider) (*ocispec.Descriptor, error) {
+	desc, err := d.convert(ctx, provider)
+	if d.mergeManifest {
+		return d.makeManifestIndex(ctx, provider.ContentStore(), provider.Image().Target(), *desc)
+	}
+	return desc, err
+}
+
+func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*ocispec.Descriptor, error) {
 	cs := provider.ContentStore()
 
 	bootstrapPath := ""
@@ -226,6 +248,51 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider) (*
 	}
 
 	return nil, fmt.Errorf("invalid media type %s", desc.MediaType)
+}
+
+func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, nydus ocispec.Descriptor) (*ocispec.Descriptor, error) {
+	ociDescs, err := nydusutils.GetManifests(ctx, cs, oci)
+	if err != nil {
+		return nil, errors.Wrap(err, "get oci image manifest list")
+	}
+
+	nydusDescs, err := nydusutils.GetManifests(ctx, cs, nydus)
+	if err != nil {
+		return nil, errors.Wrap(err, "get nydus image manifest list")
+	}
+	for idx, desc := range nydusDescs {
+		if desc.Platform == nil {
+			desc.Platform = &ocispec.Platform{}
+		}
+		desc.Platform.OSFeatures = []string{nydusutils.ManifestOSFeatureNydus}
+		nydusDescs[idx] = desc
+	}
+
+	descs := append(ociDescs, nydusDescs...)
+
+	index := ocispec.Index{
+		Versioned: specs.Versioned{
+			SchemaVersion: 2,
+		},
+		Manifests: descs,
+	}
+
+	indexDesc, indexBytes, err := nydusutils.MarshalToDesc(index, ocispec.MediaTypeImageIndex)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal image manifest index")
+	}
+
+	labels := map[string]string{}
+	for idx, desc := range descs {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", idx)] = desc.Digest.String()
+	}
+	if err := content.WriteBlob(
+		ctx, cs, indexDesc.Digest.String(), bytes.NewReader(indexBytes), *indexDesc, content.WithLabels(labels),
+	); err != nil {
+		return nil, errors.Wrap(err, "write image manifest")
+	}
+
+	return indexDesc, nil
 }
 
 func (d *Driver) getChunkDict(ctx context.Context, provider accelcontent.Provider) (*chunkDictInfo, error) {

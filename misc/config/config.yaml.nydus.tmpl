@@ -52,6 +52,11 @@ converter:
       # specify nydus blob compression algorithm, possible values: `none`, `lz4_block`, `gzip`, `zstd`, default is `lz4_block`
       # compressor: zstd
 
+      # ensure that both OCIv1 manifest and nydus manifest are present as manifest index in the target image.
+      # it's used for containerd to support running OCIv1 image or nydus image simultaneously with a single image reference.
+      # note: please ensure that OCIv1 manifest already exists in target image reference.
+      # merge_manifest: true
+
       # nydus chunk dict image reference, used for chunk-leveled data deduplication.
       # chunk_dict_ref: localhost/chunk_dict/image:latest
 

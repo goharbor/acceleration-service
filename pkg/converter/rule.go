@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/reference/docker"
-
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 )
