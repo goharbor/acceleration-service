@@ -73,7 +73,7 @@ func Append(ctx context.Context, provider providerContent.Provider, desc *ocispe
 		}
 
 		manifest.Annotations = annotate(manifest.Annotations, appended)
-		desc, err := utils.WriteJSON(ctx, provider.ContentStore(), manifest, *desc, "", labels)
+		desc, err := utils.WriteJSON(ctx, provider.ContentStore(), manifest, *desc, labels)
 		if err != nil {
 			return nil, errors.Wrap(err, "write manifest")
 		}
@@ -88,7 +88,7 @@ func Append(ctx context.Context, provider providerContent.Provider, desc *ocispe
 		}
 
 		index.Annotations = annotate(index.Annotations, appended)
-		desc, err := utils.WriteJSON(ctx, provider.ContentStore(), index, *desc, "", labels)
+		desc, err := utils.WriteJSON(ctx, provider.ContentStore(), index, *desc, labels)
 		if err != nil {
 			return nil, errors.Wrap(err, "write manifest index")
 		}
