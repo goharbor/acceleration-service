@@ -12,7 +12,7 @@ jobs:
     env:
       GO_VERSION: 1.17
       HARBOR_VERSION: 2.4.1
-      OCI_IMAGE_NAME: nginx
+      OCI_IMAGE_NAME: wordpress
     steps:
     - name: Checkout Code
       uses: actions/checkout@v2

@@ -17,6 +17,9 @@ package backend
 import (
 	"context"
 	"fmt"
+	"io"
+
+	"github.com/opencontainers/go-digest"
 )
 
 const (
@@ -27,11 +30,11 @@ const (
 // - oss: A object storage backend, which uses its SDK to upload blob file.
 type Backend interface {
 	// Push pushes specified blob file to remote storage backend.
-	Push(ctx context.Context, blobPath string) error
+	Push(ctx context.Context, blobReader io.Reader, blobDigest digest.Digest) error
 	// Check checks whether a blob exists in remote storage backend,
 	// blob exists -> return (blobPath, nil)
 	// blob not exists -> return ("", err)
-	Check(blobID string) (string, error)
+	Check(blobDigest digest.Digest) (string, error)
 	// Type returns backend type name.
 	Type() string
 }

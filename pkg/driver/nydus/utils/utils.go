@@ -83,7 +83,7 @@ func IsNydusManifest(manifest *ocispec.Manifest) bool {
 		if layer.Annotations == nil {
 			continue
 		}
-		if layer.Annotations[LayerAnnotationNydusBootstrap] != "" {
+		if _, ok := layer.Annotations[LayerAnnotationNydusBootstrap]; ok {
 			return true
 		}
 	}

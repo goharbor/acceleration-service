@@ -23,8 +23,8 @@ import (
 	"path"
 
 	"github.com/containerd/containerd/errdefs"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -33,38 +33,6 @@ const (
 
 type LocalFSBackend struct {
 	dir string
-}
-
-func moveFile(src, dst string) error {
-	err := os.Rename(src, dst)
-	if err != nil {
-		logrus.WithError(err).Warnf("failed to rename %s to %s, try to copy", src, dst)
-	} else {
-		return nil
-	}
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return errors.Wrapf(err, "open source file: %s", src)
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return errors.Wrapf(err, "create destination file: %s", dst)
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return errors.Wrapf(err, "copy file %s to %s", src, dst)
-	}
-
-	if err := os.Remove(src); err != nil {
-		logrus.WithError(err).Warnf("failed to delete source file %s", src)
-	}
-
-	return nil
 }
 
 func newLocalFSBackend(rawConfig []byte) (*LocalFSBackend, error) {
@@ -87,23 +55,29 @@ func (b *LocalFSBackend) dstPath(blobID string) string {
 	return path.Join(b.dir, blobID)
 }
 
-func (b *LocalFSBackend) Push(ctx context.Context, blobPath string) error {
+func (b *LocalFSBackend) Push(ctx context.Context, blobReader io.Reader, blobDigest digest.Digest) error {
 	if err := os.MkdirAll(b.dir, 0755); err != nil {
 		return errors.Wrap(err, "create directory in localfs backend")
 	}
 
-	blobID := path.Base(blobPath)
+	blobID := blobDigest.Hex()
 	dstPath := b.dstPath(blobID)
 
-	if err := moveFile(blobPath, dstPath); err != nil {
-		return errors.Wrap(err, "move blob file in localfs backend")
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return errors.Wrapf(err, "create destination file: %s", dstPath)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, blobReader); err != nil {
+		return errors.Wrapf(err, "copy blob to %s", dstPath)
 	}
 
 	return nil
 }
 
-func (b *LocalFSBackend) Check(blobID string) (string, error) {
-	dstPath := b.dstPath(blobID)
+func (b *LocalFSBackend) Check(blobDigest digest.Digest) (string, error) {
+	dstPath := b.dstPath(blobDigest.Hex())
 
 	info, err := os.Stat(dstPath)
 	if err != nil {

@@ -26,7 +26,7 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-// PackTargz makes .tar(.gz) stream of file named `name` and return reader
+// PackTargz makes .tar(.gz) stream of file named `name` and returns reader
 func PackTargz(src string, name string, compress bool) (io.ReadCloser, error) {
 	fi, err := os.Stat(src)
 	if err != nil {

@@ -18,20 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
-)
-
-const (
-	splitPartsCount = 4
-	// Blob size bigger than 100MB, apply multiparts upload.
-	multipartsUploadThreshold = 100 * 1024 * 1024
 )
 
 type OSSBackend struct {
@@ -75,10 +68,9 @@ func newOSSBackend(rawConfig []byte) (*OSSBackend, error) {
 	}, nil
 }
 
-// Upload nydus blob to oss storage backend, depending on blob's size,
-// upload it by multiparts method or the normal method.
-func (b *OSSBackend) Push(ctx context.Context, blobPath string) error {
-	blobID := filepath.Base(blobPath)
+// Upload nydus blob to oss storage backend.
+func (b *OSSBackend) Push(ctx context.Context, blobReader io.Reader, blobDigest digest.Digest) error {
+	blobID := blobDigest.Hex()
 	blobObjectKey := b.objectPrefix + blobID
 
 	if exist, err := b.bucket.IsObjectExist(blobObjectKey); err != nil {
@@ -88,82 +80,18 @@ func (b *OSSBackend) Push(ctx context.Context, blobPath string) error {
 		return nil
 	}
 
-	var stat os.FileInfo
-	stat, err := os.Stat(blobPath)
-	if err != nil {
-		return errors.Wrap(err, "stat blob file")
-	}
-	blobSize := stat.Size()
-
-	needMultiparts := false
-	// Blob size bigger than multipartsUploadThreshold, apply multiparts upload.
-	if blobSize >= multipartsUploadThreshold {
-		needMultiparts = true
-	}
-
-	if needMultiparts {
-		logrus.Debugf("upload %s using multiparts method", blobObjectKey)
-		chunks, err := oss.SplitFileByPartNum(blobPath, splitPartsCount)
-		if err != nil {
-			return errors.Wrap(err, "split blob file")
-		}
-
-		imur, err := b.bucket.InitiateMultipartUpload(blobObjectKey)
-		if err != nil {
-			return errors.Wrap(err, "initiate blob multipart upload")
-		}
-
-		// FIXME: it always splits the blob into splitPartsCount parts.
-		partsChan := make(chan oss.UploadPart, splitPartsCount)
-
-		g := new(errgroup.Group)
-		for _, chunk := range chunks {
-			ck := chunk
-			g.Go(func() error {
-				p, err := b.bucket.UploadPartFromFile(imur, blobPath, ck.Offset, ck.Size, ck.Number)
-				if err != nil {
-					return errors.Wrap(err, "upload part from file")
-				}
-				partsChan <- p
-				return nil
-			})
-		}
-
-		if err := g.Wait(); err != nil {
-			b.bucket.AbortMultipartUpload(imur)
-			close(partsChan)
-			return err
-		}
-
-		close(partsChan)
-
-		var parts []oss.UploadPart
-		for p := range partsChan {
-			parts = append(parts, p)
-		}
-
-		_, err = b.bucket.CompleteMultipartUpload(imur, parts)
-		if err != nil {
-			return errors.Wrap(err, "complete multipart upload")
-		}
-	} else {
-		reader, err := os.Open(blobPath)
-		if err != nil {
-			return errors.Wrap(err, "open blob file")
-		}
-		defer reader.Close()
-		err = b.bucket.PutObject(blobObjectKey, reader)
-		if err != nil {
-			return errors.Wrap(err, "put object")
-		}
+	// FIXME: handle large blob over 5GB.
+	if err := b.bucket.PutObject(blobObjectKey, blobReader); err != nil {
+		return errors.Wrap(err, "put blob object")
 	}
 
 	return nil
 }
 
-func (b *OSSBackend) Check(blobID string) (string, error) {
-	blobID = b.objectPrefix + blobID
-	if exist, err := b.bucket.IsObjectExist(blobID); err != nil {
+func (b *OSSBackend) Check(blobDigest digest.Digest) (string, error) {
+	blobID := blobDigest.Hex()
+	blobObjectKey := b.objectPrefix + blobID
+	if exist, err := b.bucket.IsObjectExist(blobObjectKey); err != nil {
 		return "", err
 	} else if exist {
 		return blobID, nil
