@@ -18,30 +18,38 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images/converter"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/stargz-snapshotter/estargz"
 	estargzconvert "github.com/containerd/stargz-snapshotter/nativeconverter/estargz"
-	"github.com/goharbor/acceleration-service/pkg/content"
+	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
+	"github.com/goharbor/acceleration-service/pkg/utils"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
 type Driver struct {
 	cfg map[string]string
+	sg  utils.Singleflight
 }
 
 func New(cfg map[string]string) (*Driver, error) {
-	return &Driver{cfg}, nil
+	return &Driver{cfg, utils.Singleflight{}}, nil
 }
 
-func (d *Driver) Convert(ctx context.Context, p content.Provider) (*ocispec.Descriptor, error) {
+func (d *Driver) Convert(ctx context.Context, p accelcontent.Provider) (*ocispec.Descriptor, error) {
 	opts, docker2oci, err := getESGZConvertOpts(d.cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse estargz conversion options")
 	}
 	platformMC := platforms.All // TODO: enable to configure the target platforms
-	return converter.DefaultIndexConvertFunc(estargzconvert.LayerConvertFunc(opts...), docker2oci, platformMC)(
+	convert := estargzconvert.LayerConvertFunc(opts...)
+	return converter.DefaultIndexConvertFunc(func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (*ocispec.Descriptor, error) {
+		return d.sg.Do(desc.Digest.String(), func() (*ocispec.Descriptor, error) {
+			return convert(ctx, cs, desc)
+		})
+	}, docker2oci, platformMC)(
 		ctx, p.ContentStore(), p.Image().Target())
 }
 

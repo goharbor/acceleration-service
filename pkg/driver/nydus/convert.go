@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/containerd/containerd/archive/compression"
 	"github.com/containerd/containerd/content"
@@ -31,88 +32,90 @@ import (
 	"github.com/pkg/errors"
 )
 
-func convertToNydusLayer(opt nydusify.PackOption, backend backend.Backend) converter.ConvertFunc {
+func (d *Driver) convertToNydusLayer(opt nydusify.PackOption, backend backend.Backend) converter.ConvertFunc {
 	return func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (*ocispec.Descriptor, error) {
 		if !images.IsLayerType(desc.MediaType) {
 			return nil, nil
 		}
 
-		ra, err := cs.ReaderAt(ctx, desc)
-		if err != nil {
-			return nil, errors.Wrap(err, "get source blob reader")
-		}
-		defer ra.Close()
-		rdr := io.NewSectionReader(ra, 0, ra.Size())
-
-		ref := fmt.Sprintf("convert-nydus-from-%s", desc.Digest)
-		dst, err := content.OpenWriter(ctx, cs, content.WithRef(ref))
-		if err != nil {
-			return nil, errors.Wrap(err, "open blob writer")
-		}
-		defer dst.Close()
-
-		tr, err := compression.DecompressStream(rdr)
-		if err != nil {
-			return nil, errors.Wrap(err, "decompress blob stream")
-		}
-
-		digester := digest.SHA256.Digester()
-		pr, pw := io.Pipe()
-		tw, err := nydusify.Pack(ctx, io.MultiWriter(pw, digester.Hash()), opt)
-		if err != nil {
-			return nil, errors.Wrap(err, "pack tar to nydus")
-		}
-
-		go func() {
-			defer pw.Close()
-			if _, err := io.Copy(tw, tr); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-			if err := tr.Close(); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-			if err := tw.Close(); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-		}()
-
-		if err := content.Copy(ctx, dst, pr, 0, ""); err != nil {
-			return nil, errors.Wrap(err, "copy nydus blob to content store")
-		}
-
-		blobDigest := digester.Digest()
-		info, err := cs.Info(ctx, blobDigest)
-		if err != nil {
-			return nil, errors.Wrapf(err, "get blob info %s", blobDigest)
-		}
-
-		newDesc := ocispec.Descriptor{
-			Digest:    blobDigest,
-			Size:      info.Size,
-			MediaType: utils.MediaTypeNydusBlob,
-			Annotations: map[string]string{
-				// Use `containerd.io/uncompressed` to generate DiffID of
-				// layer defined in OCI spec.
-				utils.LayerAnnotationUncompressed: blobDigest.String(),
-				utils.LayerAnnotationNydusBlob:    "true",
-			},
-		}
-
-		if backend != nil {
-			blobRa, err := cs.ReaderAt(ctx, newDesc)
+		return d.sg.Do(desc.Digest.String(), func() (*ocispec.Descriptor, error) {
+			ra, err := cs.ReaderAt(ctx, desc)
 			if err != nil {
-				return nil, errors.Wrap(err, "get nydus blob reader")
+				return nil, errors.Wrap(err, "get source blob reader")
 			}
-			blobReader := io.NewSectionReader(blobRa, 0, blobRa.Size())
+			defer ra.Close()
+			rdr := io.NewSectionReader(ra, 0, ra.Size())
 
-			if err := backend.Push(ctx, blobReader, blobDigest); err != nil {
-				return nil, errors.Wrap(err, "push to storage backend")
+			ref := fmt.Sprintf("convert-nydus-from-%d", time.Now().UnixNano())
+			dst, err := content.OpenWriter(ctx, cs, content.WithRef(ref))
+			if err != nil {
+				return nil, errors.Wrap(err, "open blob writer")
 			}
-		}
+			defer dst.Close()
 
-		return &newDesc, nil
+			tr, err := compression.DecompressStream(rdr)
+			if err != nil {
+				return nil, errors.Wrap(err, "decompress blob stream")
+			}
+
+			digester := digest.SHA256.Digester()
+			pr, pw := io.Pipe()
+			tw, err := nydusify.Pack(ctx, io.MultiWriter(pw, digester.Hash()), opt)
+			if err != nil {
+				return nil, errors.Wrap(err, "pack tar to nydus")
+			}
+
+			go func() {
+				defer pw.Close()
+				if _, err := io.Copy(tw, tr); err != nil {
+					pw.CloseWithError(err)
+					return
+				}
+				if err := tr.Close(); err != nil {
+					pw.CloseWithError(err)
+					return
+				}
+				if err := tw.Close(); err != nil {
+					pw.CloseWithError(err)
+					return
+				}
+			}()
+
+			if err := content.Copy(ctx, dst, pr, 0, ""); err != nil {
+				return nil, errors.Wrap(err, "copy nydus blob to content store")
+			}
+
+			blobDigest := digester.Digest()
+			info, err := cs.Info(ctx, blobDigest)
+			if err != nil {
+				return nil, errors.Wrapf(err, "get blob info %s", blobDigest)
+			}
+
+			newDesc := ocispec.Descriptor{
+				Digest:    blobDigest,
+				Size:      info.Size,
+				MediaType: utils.MediaTypeNydusBlob,
+				Annotations: map[string]string{
+					// Use `containerd.io/uncompressed` to generate DiffID of
+					// layer defined in OCI spec.
+					utils.LayerAnnotationUncompressed: blobDigest.String(),
+					utils.LayerAnnotationNydusBlob:    "true",
+				},
+			}
+
+			if backend != nil {
+				blobRa, err := cs.ReaderAt(ctx, newDesc)
+				if err != nil {
+					return nil, errors.Wrap(err, "get nydus blob reader")
+				}
+				blobReader := io.NewSectionReader(blobRa, 0, blobRa.Size())
+
+				if err := backend.Push(ctx, blobReader, blobDigest); err != nil {
+					return nil, errors.Wrap(err, "push to storage backend")
+				}
+			}
+
+			return &newDesc, nil
+		})
 	}
 }
