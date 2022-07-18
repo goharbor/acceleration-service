@@ -58,9 +58,7 @@ func mergeNydusLayers(ctx context.Context, cs content.Store, descs []ocispecs.De
 	pr, pw := io.Pipe()
 	go func() {
 		defer pw.Close()
-		if err := nydusify.Merge(ctx, layers, pw, nydusify.MergeOption{
-			WithTar: true,
-		}); err != nil {
+		if err := nydusify.Merge(ctx, layers, pw, opt); err != nil {
 			pw.CloseWithError(errors.Wrapf(err, "merge nydus bootstrap"))
 		}
 	}()
