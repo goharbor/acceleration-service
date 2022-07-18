@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/images"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -53,4 +54,28 @@ func WriteJSON(ctx context.Context, cs content.Store, x interface{}, oldDesc oci
 	}
 
 	return &newDesc, nil
+}
+
+func GetManifests(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+	var descs []ocispec.Descriptor
+	switch desc.MediaType {
+	case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+		descs = append(descs, desc)
+	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+		p, err := content.ReadBlob(ctx, provider, desc)
+		if err != nil {
+			return nil, err
+		}
+
+		var index ocispec.Index
+		if err := json.Unmarshal(p, &index); err != nil {
+			return nil, err
+		}
+
+		descs = append(descs, index.Manifests...)
+	default:
+		return nil, nil
+	}
+
+	return descs, nil
 }
