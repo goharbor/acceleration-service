@@ -15,15 +15,12 @@
 package utils
 
 import (
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"unsafe"
 
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -88,30 +85,6 @@ func IsNydusManifest(manifest *ocispec.Manifest) bool {
 		}
 	}
 	return false
-}
-
-func GetManifests(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-	var descs []ocispec.Descriptor
-	switch desc.MediaType {
-	case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-		descs = append(descs, desc)
-	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-		p, err := content.ReadBlob(ctx, provider, desc)
-		if err != nil {
-			return nil, err
-		}
-
-		var index ocispec.Index
-		if err := json.Unmarshal(p, &index); err != nil {
-			return nil, err
-		}
-
-		descs = append(descs, index.Manifests...)
-	default:
-		return nil, nil
-	}
-
-	return descs, nil
 }
 
 type ExcludeNydusPlatformComparer struct {

@@ -16,12 +16,14 @@ package content
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/snapshots"
@@ -32,6 +34,7 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/config"
 	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/remote"
+	"github.com/goharbor/acceleration-service/pkg/utils"
 )
 
 var logger = logrus.WithField("module", "content")
@@ -92,6 +95,53 @@ func (pvd *LocalProvider) Resolver(ctx context.Context, ref string) (remotes.Res
 	return resolver, nil
 }
 
+func (pvd *LocalProvider) updateLayerDiffID(ctx context.Context, image ocispec.Descriptor) error {
+	cs := pvd.ContentStore()
+
+	maniDescs, err := utils.GetManifests(ctx, cs, image)
+	if err != nil {
+		return errors.Wrap(err, "get manifests")
+	}
+
+	for _, desc := range maniDescs {
+		bytes, err := content.ReadBlob(ctx, cs, desc)
+		if err != nil {
+			return errors.Wrap(err, "read manifest")
+		}
+
+		var manifest ocispec.Manifest
+		if err := json.Unmarshal(bytes, &manifest); err != nil {
+			return errors.Wrap(err, "unmarshal manifest")
+		}
+
+		diffIDs, err := images.RootFS(ctx, cs, manifest.Config)
+		if err != nil {
+			return errors.Wrap(err, "get diff ids from config")
+		}
+		if len(manifest.Layers) != len(diffIDs) {
+			return fmt.Errorf("unmatched layers between manifest and config: %d != %d", len(manifest.Layers), len(diffIDs))
+		}
+
+		for idx, diffID := range diffIDs {
+			layerDesc := manifest.Layers[idx]
+			info, err := cs.Info(ctx, layerDesc.Digest)
+			if err != nil {
+				return errors.Wrap(err, "get layer info")
+			}
+			if info.Labels == nil {
+				info.Labels = map[string]string{}
+			}
+			info.Labels[labels.LabelUncompressed] = diffID.String()
+			_, err = cs.Update(ctx, info)
+			if err != nil {
+				return errors.Wrap(err, "update layer label")
+			}
+		}
+	}
+
+	return nil
+}
+
 func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 	resolver, err := pvd.Resolver(ctx, ref)
 	if err != nil {
@@ -120,6 +170,14 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}
+
+	// Write a diff id label of layer in content store for simplifying
+	// diff id calculation to speed up the conversion.
+	// See: https://github.com/containerd/containerd/blob/e4fefea5544d259177abb85b64e428702ac49c97/images/diffid.go#L49
+	if err := pvd.updateLayerDiffID(ctx, image.Target); err != nil {
+		return errors.Wrap(err, "update layer diff id")
+	}
+
 	pvd.image = containerd.NewImageWithPlatform(pvd.client, image, platformMatcher)
 
 	return nil

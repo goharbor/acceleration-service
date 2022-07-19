@@ -17,6 +17,7 @@ package converter
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/snapshots"
@@ -115,12 +116,14 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 	}
 
 	logger.Infof("pulling image %s", source)
+	start := time.Now()
 	if err := content.Pull(ctx, source); err != nil {
 		return errors.Wrap(err, "pull image")
 	}
-	logger.Infof("pulled image %s", source)
+	logger.Infof("pulled image %s, elapse %s", source, time.Since(start))
 
 	logger.Infof("converting image %s", source)
+	start = time.Now()
 	desc, err := cvt.driver.Convert(ctx, content)
 	if err != nil {
 		return errors.Wrap(err, "convert image")
@@ -138,13 +141,14 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 			return errors.Wrap(err, "append annotations")
 		}
 	}
-	logger.Infof("converted image %s", target)
+	logger.Infof("converted image %s, elapse %s", target, time.Since(start))
 
+	start = time.Now()
 	logger.Infof("pushing image %s", target)
 	if err := content.Push(ctx, *desc, target); err != nil {
 		return errors.Wrap(err, "push image")
 	}
-	logger.Infof("pushed image %s", target)
+	logger.Infof("pushed image %s, elapse %s", target, time.Since(start))
 
 	return nil
 }
