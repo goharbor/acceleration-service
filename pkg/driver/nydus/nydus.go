@@ -120,6 +120,9 @@ func (d *Driver) Version() string {
 
 func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider) (*ocispec.Descriptor, error) {
 	desc, err := d.convert(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
 	if d.mergeManifest {
 		return d.makeManifestIndex(ctx, provider.ContentStore(), provider.Image().Target(), *desc)
 	}
@@ -129,13 +132,13 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider) (*
 func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*ocispec.Descriptor, error) {
 	cs := provider.ContentStore()
 
-	bootstrapPath := ""
+	chunkDictPath := ""
 	if d.chunkDictRef != "" {
 		chunkDictInfo, err := d.getChunkDict(ctx, provider)
 		if err != nil {
 			return nil, errors.Wrap(err, "get chunk dict info")
 		}
-		bootstrapPath = chunkDictInfo.BootstrapPath
+		chunkDictPath = chunkDictInfo.BootstrapPath
 	}
 
 	desc, err := converter.DefaultIndexConvertFunc(convertToNydusLayer(nydusify.PackOption{
@@ -143,7 +146,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*
 		Compressor:    d.compressor,
 		BuilderPath:   d.builderPath,
 		WorkDir:       d.workDir,
-		ChunkDictPath: bootstrapPath,
+		ChunkDictPath: chunkDictPath,
 	}, d.backend), true, platforms.All)(
 		ctx, cs, provider.Image().Target(),
 	)
@@ -164,7 +167,8 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*
 		bootstrapDesc, err := mergeNydusLayers(ctx, cs, manifest.Layers, nydusify.MergeOption{
 			BuilderPath:   d.builderPath,
 			WorkDir:       d.workDir,
-			ChunkDictPath: bootstrapPath,
+			ChunkDictPath: chunkDictPath,
+			WithTar:       true,
 		}, d.fsVersion)
 		if err != nil {
 			return nil, errors.Wrap(err, "merge nydus layers")
