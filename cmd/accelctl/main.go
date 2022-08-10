@@ -28,6 +28,7 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/handler"
 )
 
+var versionTag string
 var versionGitCommit string
 var versionBuildTime string
 
@@ -46,7 +47,8 @@ func main() {
 		TimestampFormat: time.RFC3339Nano,
 	})
 
-	version := fmt.Sprintf("%s.%s", versionGitCommit, versionBuildTime)
+	version := fmt.Sprintf("%s %s.%s", versionTag, versionGitCommit, versionBuildTime)
+	logrus.Infof("Version: %s\n", version)
 
 	app := &cli.App{
 		Name:    "accelctl",
