@@ -118,7 +118,15 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 	logger.Infof("pulling image %s", source)
 	start := time.Now()
 	if err := content.Pull(ctx, source); err != nil {
-		return errors.Wrap(err, "pull image")
+		if errdefs.NeedsRetryWithHTTP(err) {
+			logger.Infof("try to pull with plain HTTP for %s", source)
+			content.UsePlainHTTP()
+			if err := content.Pull(ctx, source); err != nil {
+				return errors.Wrap(err, "try to pull image")
+			}
+		} else {
+			return errors.Wrap(err, "pull image")
+		}
 	}
 	logger.Infof("pulled image %s, elapse %s", source, time.Since(start))
 
@@ -146,7 +154,15 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source string) error {
 	start = time.Now()
 	logger.Infof("pushing image %s", target)
 	if err := content.Push(ctx, *desc, target); err != nil {
-		return errors.Wrap(err, "push image")
+		if errdefs.NeedsRetryWithHTTP(err) {
+			logger.Infof("try to push with plain HTTP for %s", target)
+			content.UsePlainHTTP()
+			if err := content.Push(ctx, *desc, target); err != nil {
+				return errors.Wrap(err, "try to push image")
+			}
+		} else {
+			return errors.Wrap(err, "push image")
+		}
 	}
 	logger.Infof("pushed image %s, elapse %s", target, time.Since(start))
 

@@ -41,9 +41,12 @@ func New(content content.Provider) (*Parser, error) {
 	}, nil
 }
 
-func (parser *Parser) PullAsChunkDict(ctx context.Context, ref string) (imageContent.ReaderAt, map[string]ocispec.Descriptor, error) {
+func (parser *Parser) PullAsChunkDict(ctx context.Context, ref string, usePlainHTTP bool) (imageContent.ReaderAt, map[string]ocispec.Descriptor, error) {
 	cs := parser.content.ContentStore()
 
+	if usePlainHTTP {
+		parser.content.UsePlainHTTP()
+	}
 	resolver, err := parser.content.Resolver(ctx, ref)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "get resolver for %s", ref)
