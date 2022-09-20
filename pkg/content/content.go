@@ -42,11 +42,13 @@ var logger = logrus.WithField("module", "content")
 // Provider provides necessary image utils, image content
 // store for image conversion.
 type Provider interface {
+	// Use plain HTTP to communicate with registry.
+	UsePlainHTTP()
 	// Resolve attempts to resolve the reference into a name and descriptor.
 	Resolver(ctx context.Context, ref string) (remotes.Resolver, error)
 	// Pull pulls source image from remote registry by specified reference.
 	// This pulls all platforms of the image but Image() returns containerd.Image for
-	// the default platoform.
+	// the default platform.
 	Pull(ctx context.Context, ref string) error
 	// Push pushes target image to remote registry by specified reference,
 	// the desc parameter represents the manifest of targe image.
@@ -63,10 +65,11 @@ type Provider interface {
 }
 
 type LocalProvider struct {
-	image       containerd.Image
-	cfg         *config.ProviderConfig
-	snapshotter snapshots.Snapshotter
-	client      *containerd.Client
+	image        containerd.Image
+	cfg          *config.ProviderConfig
+	snapshotter  snapshots.Snapshotter
+	client       *containerd.Client
+	usePlainHTTP bool
 }
 
 func NewLocalProvider(
@@ -77,6 +80,10 @@ func NewLocalProvider(
 		snapshotter: snapshotter,
 		client:      client,
 	}, nil
+}
+
+func (pvd *LocalProvider) UsePlainHTTP() {
+	pvd.usePlainHTTP = true
 }
 
 func (pvd *LocalProvider) Resolver(ctx context.Context, ref string) (remotes.Resolver, error) {
@@ -90,7 +97,7 @@ func (pvd *LocalProvider) Resolver(ctx context.Context, ref string) (remotes.Res
 		return nil, fmt.Errorf("not found matched hostname %s in config", refURL.Host)
 	}
 
-	resolver := remote.NewResolver(auth.Insecure, remote.NewBasicAuthCredFunc(auth.Auth))
+	resolver := remote.NewResolver(auth.Insecure, pvd.usePlainHTTP, remote.NewBasicAuthCredFunc(auth.Auth))
 
 	return resolver, nil
 }

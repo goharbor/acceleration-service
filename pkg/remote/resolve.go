@@ -29,7 +29,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func newDefaultClient() *http.Client {
+func newDefaultClient(skipTLSVerify bool) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -44,6 +44,9 @@ func newDefaultClient() *http.Client {
 			ExpectContinueTimeout: 5 * time.Second,
 			DisableKeepAlives:     true,
 			TLSNextProto:          make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: skipTLSVerify,
+			},
 		},
 	}
 }
@@ -92,22 +95,15 @@ func NewBasicAuthCredFunc(auth string) withCredentialFunc {
 	}
 }
 
-func NewResolver(insecure bool, credFunc withCredentialFunc) remotes.Resolver {
+func NewResolver(insecure, plainHTTP bool, credFunc withCredentialFunc) remotes.Resolver {
 	registryHosts := docker.ConfigureDefaultRegistries(
 		docker.WithAuthorizer(docker.NewAuthorizer(
-			newDefaultClient(),
+			newDefaultClient(insecure),
 			credFunc,
 		)),
-		docker.WithClient(newDefaultClient()),
+		docker.WithClient(newDefaultClient(insecure)),
 		docker.WithPlainHTTP(func(host string) (bool, error) {
-			_insecure, err := docker.MatchLocalhost(host)
-			if err != nil {
-				return false, err
-			}
-			if _insecure {
-				return true, nil
-			}
-			return insecure, nil
+			return plainHTTP, nil
 		}),
 	)
 

@@ -19,8 +19,8 @@ provider:
       # base64 encoded `<robot-name>:<robot-secret>` for robot
       # account created in harbor
       auth: YTpiCg==
-      # use http registry communication
-      insecure: true
+      # skip verifying server certs for HTTPS source registry
+      insecure: false
       webhook:
         # webhook request auth header configured in harbor
         auth_header: header

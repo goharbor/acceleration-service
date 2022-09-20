@@ -28,6 +28,8 @@ import (
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/backend"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
+	"github.com/goharbor/acceleration-service/pkg/errdefs"
+	"github.com/goharbor/harbor/src/jobservice/logger"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -308,9 +310,18 @@ func (d *Driver) getChunkDict(ctx context.Context, provider accelcontent.Provide
 	if err != nil {
 		return nil, errors.Wrap(err, "create chunk dict parser")
 	}
-	bootstrapReader, _, err := parser.PullAsChunkDict(ctx, d.chunkDictRef)
+
+	bootstrapReader, _, err := parser.PullAsChunkDict(ctx, d.chunkDictRef, false)
 	if err != nil {
-		return nil, errors.Wrapf(err, "pull chunk dict image %s", d.chunkDictRef)
+		if errdefs.NeedsRetryWithHTTP(err) {
+			logger.Infof("try to pull chunk dict image with plain HTTP for %s", d.chunkDictRef)
+			bootstrapReader, _, err = parser.PullAsChunkDict(ctx, d.chunkDictRef, true)
+			if err != nil {
+				return nil, errors.Wrapf(err, "try to pull chunk dict image %s", d.chunkDictRef)
+			}
+		} else {
+			return nil, errors.Wrapf(err, "pull chunk dict image %s", d.chunkDictRef)
+		}
 	}
 	defer bootstrapReader.Close()
 
