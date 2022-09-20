@@ -44,7 +44,7 @@ jobs:
 
     - name: Test Nydus Driver
       run: |
-        NYDUS_VERSION=v2.0.1
+        NYDUS_VERSION=v2.1.0-rc.3
 
         # Download nydus components
         wget https://github.com/dragonflyoss/image-service/releases/download/$NYDUS_VERSION/nydus-static-$NYDUS_VERSION-linux-amd64.tgz
