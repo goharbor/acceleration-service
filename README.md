@@ -45,13 +45,13 @@ $ printf '<robot-name>:<robot-secret>' | base64
 nydus:
 
 ``` shell
-$ cp misc/config/config.yaml.nydus.tmpl misc/config/config.yaml
+$ cp misc/config/config.nydus.yaml misc/config/config.yaml
 ```
 
 estargz:
 
 ``` shell
-$ cp misc/config/config.yaml.estargz.tmpl misc/config/config.yaml
+$ cp misc/config/config.estargz.yaml misc/config/config.yaml
 ```
 
 2. Edit config file
@@ -153,7 +153,7 @@ type Driver interface {
 
 ### Testing
 
-We can specify the driver name by modifying `converter.driver` in the configuration file, and modify the fields in `converter.config` to specify the driver-related configuration, see [example configuration file](./misc/config/config.yaml.estargz.tmpl).
+We can specify the driver name by modifying `converter.driver` in the configuration file, and modify the fields in `converter.config` to specify the driver-related configuration, see [example configuration file](./misc/config/config.estargz.yaml).
 
 ## API
 

@@ -1,7 +1,7 @@
-FROM golang:1.17.7 AS build
+FROM golang:1.18.7 AS build
 
 ARG CONTAINERD_VERSION=1.5.7
-ARG NYDUS_VERSION=v2.1.0-rc.3
+ARG NYDUS_VERSION=v2.1.0
 
 ARG CONTAINERD_LINUX_AMD64_SHA256SUM="109fc95b86382065ea668005c376360ddcd8c4ec413e7abe220ae9f461e0e173"
 ARG NYDUS_LINUX_AMD64_SHA256SUM="3f31f9398bd0a21512310b4d52fa6976b7d959ba4a13d7a3615f6efeb2c04fed"
@@ -9,6 +9,7 @@ ARG NYDUS_LINUX_AMD64_SHA256SUM="3f31f9398bd0a21512310b4d52fa6976b7d959ba4a13d7a
 # Install acceld
 COPY ./ /accel
 RUN make -C /accel install-check-tools
+RUN make -C /accel check
 RUN make -C /accel
 
 # Install containerd

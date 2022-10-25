@@ -9,7 +9,7 @@ jobs:
   release_image:
     runs-on: ubuntu-20.04
     env:
-      GO_VERSION: 1.17
+      GO_VERSION: 1.18
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
@@ -36,7 +36,7 @@ jobs:
       # Enable tty for docker
       shell: 'script -q -e -c "bash {0}"'
       run: |
-        docker run -v $PWD/misc/config/config.yaml.nydus.tmpl:/etc/acceld-config.yaml -d --rm -p 2077:2077 goharbor/harbor-acceld:${{ env.IMAGE_TAG }} /etc/acceld-config.yaml
+        docker run -v $PWD/misc/config/config.nydus.yaml:/etc/acceld-config.yaml -d --rm -p 2077:2077 goharbor/harbor-acceld:${{ env.IMAGE_TAG }} /etc/acceld-config.yaml
         sleep 5
         curl -f http://127.0.0.1:2077/api/v1/health
 
@@ -57,7 +57,7 @@ jobs:
   release_binary:
     runs-on: ubuntu-20.04
     env:
-      GO_VERSION: 1.17
+      GO_VERSION: 1.18
       OUTPUT_DIR: ${{ github.workspace }}/out
     steps:
       - uses: actions/checkout@v3
