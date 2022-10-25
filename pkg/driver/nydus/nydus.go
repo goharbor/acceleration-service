@@ -167,11 +167,12 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*
 
 		// Append bootstrap layer to manifest.
 		bootstrapDesc, err := mergeNydusLayers(ctx, cs, manifest.Layers, nydusify.MergeOption{
-			BuilderPath:   d.builderPath,
 			WorkDir:       d.workDir,
+			BuilderPath:   d.builderPath,
+			FsVersion:     d.fsVersion,
 			ChunkDictPath: chunkDictPath,
 			WithTar:       true,
-		}, d.fsVersion)
+		})
 		if err != nil {
 			return nil, errors.Wrap(err, "merge nydus layers")
 		}

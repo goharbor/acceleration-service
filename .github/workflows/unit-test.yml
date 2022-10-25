@@ -10,7 +10,7 @@ jobs:
   unit_test:
     runs-on: ubuntu-latest
     env:
-      GO_VERSION: 1.17
+      GO_VERSION: 1.18
     steps:
     - name: Checkout Code
       uses: actions/checkout@v2

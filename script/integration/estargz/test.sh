@@ -5,7 +5,7 @@ set -euo pipefail
 OCI_IMAGE_NAME=$1
 
 # Start acceld service
-sudo nohup ./acceld --config ./misc/config/config.yaml.estargz.tmpl &> acceld.log &
+sudo nohup ./acceld --config ./misc/config/config.estargz.yaml &> acceld.log &
 sleep 1
 
 # Convert image by accelctl
