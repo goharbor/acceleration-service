@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func mergeNydusLayers(ctx context.Context, cs content.Store, descs []ocispecs.Descriptor, opt nydusify.MergeOption, fsVersion string) (*ocispecs.Descriptor, error) {
+func mergeNydusLayers(ctx context.Context, cs content.Store, descs []ocispecs.Descriptor, opt nydusify.MergeOption) (*ocispecs.Descriptor, error) {
 	// Extracts nydus bootstrap from nydus format for each layer.
 	layers := []nydusify.Layer{}
 	blobIDs := []string{}
@@ -58,7 +58,7 @@ func mergeNydusLayers(ctx context.Context, cs content.Store, descs []ocispecs.De
 	pr, pw := io.Pipe()
 	go func() {
 		defer pw.Close()
-		if err := nydusify.Merge(ctx, layers, pw, opt); err != nil {
+		if _, err := nydusify.Merge(ctx, layers, pw, opt); err != nil {
 			pw.CloseWithError(errors.Wrapf(err, "merge nydus bootstrap"))
 		}
 	}()
@@ -108,7 +108,7 @@ func mergeNydusLayers(ctx context.Context, cs content.Store, descs []ocispecs.De
 		MediaType: ocispecs.MediaTypeImageLayerGzip,
 		Annotations: map[string]string{
 			utils.LayerAnnotationUncompressed:   uncompressedDgst.Digest().String(),
-			utils.LayerAnnotationNydusFsVersion: fsVersion,
+			utils.LayerAnnotationNydusFsVersion: opt.FsVersion,
 			// Use this annotation to identify nydus bootstrap layer.
 			nydusify.LayerAnnotationNydusBootstrap: "true",
 			// Track all blob digests for nydus snapshotter.
