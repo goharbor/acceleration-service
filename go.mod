@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
 	github.com/containerd/containerd v1.6.6
-	github.com/containerd/nydus-snapshotter v0.3.1
+	github.com/containerd/nydus-snapshotter v0.11.3
 	github.com/containerd/stargz-snapshotter v0.9.0
 	github.com/containerd/stargz-snapshotter/estargz v0.11.4
 	github.com/docker/cli v20.10.9+incompatible
