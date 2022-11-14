@@ -47,7 +47,7 @@ converter:
       builder: nydus-image
 
       # convert to OCI-referenced nydus zran image.
-      oci_ref: false
+      oci_ref: true
 
       # specify nydus format version, possible values: `5`, `6` (EROFS-compatible), default is `6`
       # fs_version: 6
@@ -71,4 +71,4 @@ converter:
       # backend_config: '{"dir":"/path/to/dir"}'
   rules:
     # add suffix to tag of source image reference as target image reference
-    - tag_suffix: -nydus
+    - tag_suffix: -nydus-oci-ref
