@@ -11,7 +11,7 @@ require (
 	github.com/goharbor/harbor/src v0.0.0-20211021012518-bc6a7f65a6fa
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.11.0
-	github.com/labstack/echo/v4 v4.6.1
+	github.com/labstack/echo/v4 v4.9.1
 	github.com/labstack/gommon v0.4.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799
