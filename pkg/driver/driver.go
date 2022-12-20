@@ -20,7 +20,6 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
-	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver/estargz"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus"
@@ -45,13 +44,13 @@ type Driver interface {
 	Version() string
 }
 
-func NewLocalDriver(cfg *config.DriverConfig) (Driver, error) {
-	switch cfg.Type {
+func NewLocalDriver(typ string, config map[string]string) (Driver, error) {
+	switch typ {
 	case "nydus":
-		return nydus.New(cfg.Config)
+		return nydus.New(config)
 	case "estargz":
-		return estargz.New(cfg.Config)
+		return estargz.New(config)
 	default:
-		return nil, fmt.Errorf("unsupported driver %s", cfg.Type)
+		return nil, fmt.Errorf("unsupported driver %s", typ)
 	}
 }

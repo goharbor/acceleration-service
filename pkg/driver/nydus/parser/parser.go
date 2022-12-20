@@ -47,7 +47,7 @@ func (parser *Parser) PullAsChunkDict(ctx context.Context, ref string, usePlainH
 	if usePlainHTTP {
 		parser.content.UsePlainHTTP()
 	}
-	resolver, err := parser.content.Resolver(ctx, ref)
+	resolver, err := parser.content.Resolver(ref)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "get resolver for %s", ref)
 	}

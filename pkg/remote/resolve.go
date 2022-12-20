@@ -16,17 +16,14 @@ package remote
 
 import (
 	"crypto/tls"
-	"encoding/base64"
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
 	dockerconfig "github.com/docker/cli/cli/config"
-	"github.com/pkg/errors"
 )
 
 func newDefaultClient(skipTLSVerify bool) *http.Client {
@@ -51,13 +48,17 @@ func newDefaultClient(skipTLSVerify bool) *http.Client {
 	}
 }
 
-// withCredentialFunc accepts host url parameter and returns with
+// CredentialFunc accepts host url parameter and returns with
 // username, password and error.
-type withCredentialFunc = func(string) (string, string, error)
+type CredentialFunc = func(string) (string, string, error)
+
+// HostFunc  accepts host url parameter and returns with
+// CredentialFunc, insecure and error.
+type HostFunc = func(ref string) (CredentialFunc, bool, error)
 
 // NewDockerConfigCredFunc attempts to read docker auth config file `$DOCKER_CONFIG/config.json`
 // to communicate with remote registry, `$DOCKER_CONFIG` defaults to `~/.docker`.
-func NewDockerConfigCredFunc() withCredentialFunc {
+func NewDockerConfigCredFunc() CredentialFunc {
 	return func(host string) (string, string, error) {
 		// The host of docker hub image will be converted to `registry-1.docker.io` in:
 		// github.com/containerd/containerd/remotes/docker/registry.go
@@ -76,26 +77,7 @@ func NewDockerConfigCredFunc() withCredentialFunc {
 	}
 }
 
-// NewBasicAuthCredFunc parses base64 encoded auth string to communicate with remote registry.
-func NewBasicAuthCredFunc(auth string) withCredentialFunc {
-	return func(host string) (string, string, error) {
-		// Leave auth empty if no authorization be required
-		if strings.TrimSpace(auth) == "" {
-			return "", "", nil
-		}
-		decoded, err := base64.StdEncoding.DecodeString(auth)
-		if err != nil {
-			return "", "", errors.Wrap(err, "decode base64 encoded auth string")
-		}
-		ary := strings.Split(string(decoded), ":")
-		if len(ary) != 2 {
-			return "", "", errors.New("invalid base64 encoded auth string")
-		}
-		return ary[0], ary[1], nil
-	}
-}
-
-func NewResolver(insecure, plainHTTP bool, credFunc withCredentialFunc) remotes.Resolver {
+func NewResolver(insecure, plainHTTP bool, credFunc CredentialFunc) remotes.Resolver {
 	registryHosts := docker.ConfigureDefaultRegistries(
 		docker.WithAuthorizer(docker.NewAuthorizer(
 			newDefaultClient(insecure),

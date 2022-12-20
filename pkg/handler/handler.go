@@ -21,8 +21,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/goharbor/acceleration-service/pkg/adapter"
 	"github.com/goharbor/acceleration-service/pkg/config"
-	"github.com/goharbor/acceleration-service/pkg/converter"
 )
 
 const healthCheckTimeout = time.Second * 5
@@ -44,18 +44,18 @@ type Handler interface {
 
 type LocalHandler struct {
 	cfg *config.Config
-	cvt converter.Converter
+	adp adapter.Adapter
 }
 
 func NewLocalHandler(cfg *config.Config) (*LocalHandler, error) {
-	cvt, err := converter.NewLocalConverter(cfg)
+	adp, err := adapter.NewLocalAdapter(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "create converter")
 	}
 
 	handler := &LocalHandler{
 		cfg: cfg,
-		cvt: cvt,
+		adp: adp,
 	}
 
 	return handler, nil
@@ -75,11 +75,11 @@ func (handler *LocalHandler) Auth(ctx context.Context, host string, authHeader s
 }
 
 func (handler *LocalHandler) Convert(ctx context.Context, ref string, sync bool) error {
-	return handler.cvt.Dispatch(ctx, ref, sync)
+	return handler.adp.Dispatch(ctx, ref, sync)
 }
 
 func (handler *LocalHandler) CheckHealth(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
 	defer cancel()
-	return handler.cvt.CheckHealth(ctx)
+	return handler.adp.CheckHealth(ctx)
 }
