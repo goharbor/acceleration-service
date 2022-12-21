@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/goharbor/acceleration-service/pkg/config"
+	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/converter"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/metrics"
@@ -58,10 +59,14 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, errors.Wrap(err, "create containerd client")
 	}
 
+	provider, err := content.NewLocalProvider(client, cfg.Host)
+	if err != nil {
+		return nil, errors.Wrap(err, "create content provider")
+	}
+
 	cvt, err := converter.NewLocalConverter(
-		converter.WithClient(client),
+		converter.WithProvider(provider),
 		converter.WithDriver(cfg.Converter.Driver.Type, cfg.Converter.Driver.Config),
-		converter.WithHosts(cfg.Host),
 	)
 	if err != nil {
 		return nil, err
@@ -96,6 +101,12 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		}
 		return errors.Wrap(err, "create target reference by rule")
 	}
+
+	ctx, done, err := adp.client.WithLease(ctx)
+	if err != nil {
+		return errors.Wrap(err, "create lease")
+	}
+	defer done(ctx)
 
 	return adp.cvt.Convert(ctx, source, target)
 }

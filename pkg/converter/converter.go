@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/defaults"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -32,10 +30,8 @@ import (
 var logger = logrus.WithField("module", "converter")
 
 type LocalConverter struct {
-	client   *containerd.Client
 	driver   driver.Driver
 	provider content.Provider
-	opts     ConvertOpts
 }
 
 func NewLocalConverter(opts ...ConvertOpt) (*LocalConverter, error) {
@@ -46,44 +42,20 @@ func NewLocalConverter(opts ...ConvertOpt) (*LocalConverter, error) {
 		}
 	}
 
-	if options.client == nil {
-		client, err := containerd.New(defaults.DefaultAddress)
-		if err != nil {
-			return nil, errors.Wrapf(err, "connect to containerd address %s", defaults.DefaultAddress)
-		}
-		options.client = client
-	}
-
-	provider, err := content.NewLocalProvider(
-		options.client,
-		options.hosts,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "create content provider")
-	}
-
 	driver, err := driver.NewLocalDriver(options.driverType, options.driverConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "create driver")
 	}
 
 	handler := &LocalConverter{
-		client:   options.client,
 		driver:   driver,
-		provider: provider,
-		opts:     options,
+		provider: options.provider,
 	}
 
 	return handler, nil
 }
 
 func (cvt *LocalConverter) Convert(ctx context.Context, source, target string) error {
-	ctx, done, err := cvt.client.WithLease(ctx)
-	if err != nil {
-		return errors.Wrap(err, "create lease")
-	}
-	defer done(ctx)
-
 	logger.Infof("pulling image %s", source)
 	start := time.Now()
 	if err := cvt.provider.Pull(ctx, source); err != nil {
@@ -101,7 +73,7 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source, target string) e
 
 	logger.Infof("converting image %s", source)
 	start = time.Now()
-	desc, err := cvt.driver.Convert(ctx, cvt.provider)
+	desc, err := cvt.driver.Convert(ctx, cvt.provider, source)
 	if err != nil {
 		return errors.Wrap(err, "convert image")
 	}

@@ -35,14 +35,18 @@ func New(cfg map[string]string) (*Driver, error) {
 	return &Driver{cfg}, nil
 }
 
-func (d *Driver) Convert(ctx context.Context, p content.Provider) (*ocispec.Descriptor, error) {
+func (d *Driver) Convert(ctx context.Context, p content.Provider, ref string) (*ocispec.Descriptor, error) {
 	opts, docker2oci, err := getESGZConvertOpts(d.cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse estargz conversion options")
 	}
 	platformMC := platforms.All // TODO: enable to configure the target platforms
+	image, err := p.Image(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "get source image")
+	}
 	return converter.DefaultIndexConvertFunc(estargzconvert.LayerConvertFunc(opts...), docker2oci, platformMC)(
-		ctx, p.ContentStore(), p.Image().Target())
+		ctx, p.ContentStore(), *image)
 }
 
 func (d *Driver) Name() string {

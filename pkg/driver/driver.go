@@ -30,10 +30,11 @@ import (
 type Driver interface {
 	// Convert converts the source image to target image, where
 	// content parameter provides necessary image utils, image
-	// content store and so on. If conversion successful, the
+	// content store and so on, where source parameter is the
+	// original image reference. If conversion successful, the
 	// converted image manifest will be returned, otherwise a
 	// non-nil error will be returned.
-	Convert(context.Context, content.Provider) (*ocispec.Descriptor, error)
+	Convert(ctx context.Context, content content.Provider, source string) (*ocispec.Descriptor, error)
 
 	// Name gets the driver type name, it is used to identify
 	// different accelerated image formats.

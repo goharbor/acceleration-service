@@ -41,6 +41,7 @@ var logger = logrus.WithField("module", "content")
 type Provider interface {
 	// Use plain HTTP to communicate with registry.
 	UsePlainHTTP()
+
 	// Resolve attempts to resolve the reference into a name and descriptor.
 	Resolver(ref string) (remotes.Resolver, error)
 	// Pull pulls source image from remote registry by specified reference.
@@ -51,18 +52,15 @@ type Provider interface {
 	// the desc parameter represents the manifest of targe image.
 	Push(ctx context.Context, desc ocispec.Descriptor, ref string) error
 
-	// Image gets the source image object.
-	Image() containerd.Image
+	// Image gets the source image descriptor.
+	Image(ctx context.Context, ref string) (*ocispec.Descriptor, error)
 	// ContentStore gets the content store object of containerd.
 	ContentStore() content.Store
-	// Client gets the raw containerd client.
-	Client() *containerd.Client
 }
 
 type LocalProvider struct {
-	image        containerd.Image
-	client       *containerd.Client
 	usePlainHTTP bool
+	client       *containerd.Client
 	hosts        remote.HostFunc
 }
 
@@ -171,8 +169,6 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		return errors.Wrap(err, "update layer diff id")
 	}
 
-	pvd.image = containerd.NewImageWithPlatform(pvd.client, image, platformMatcher)
-
 	return nil
 }
 
@@ -186,14 +182,15 @@ func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref
 	return pvd.client.Push(ctx, ref, desc, containerd.WithResolver(resolver))
 }
 
-func (pvd *LocalProvider) Image() containerd.Image {
-	return pvd.image
+func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descriptor, error) {
+	image, err := pvd.client.GetImage(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	target := image.Target()
+	return &target, nil
 }
 
 func (pvd *LocalProvider) ContentStore() content.Store {
 	return pvd.client.ContentStore()
-}
-
-func (pvd *LocalProvider) Client() *containerd.Client {
-	return pvd.client
 }
