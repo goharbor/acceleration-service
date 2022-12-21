@@ -32,6 +32,7 @@ import (
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
@@ -49,7 +50,20 @@ type Driver struct {
 	compressor    string
 	chunkDictRef  string
 	mergeManifest bool
+	ociRef        bool
 	backend       backend.Backend
+}
+
+func parseBool(v string) (bool, error) {
+	parsed := false
+	if v != "" {
+		var err error
+		parsed, err = strconv.ParseBool(v)
+		if err != nil {
+			return false, fmt.Errorf("invalid merge_manifest option")
+		}
+	}
+	return parsed, nil
 }
 
 func New(cfg map[string]string) (*Driver, error) {
@@ -90,13 +104,19 @@ func New(cfg map[string]string) (*Driver, error) {
 		compressor = cfg["rafs_compressor"]
 	}
 
-	_mergeManifest := cfg["merge_manifest"]
-	mergeManifest := false
-	if _mergeManifest != "" {
-		mergeManifest, err = strconv.ParseBool(_mergeManifest)
-		if err != nil {
-			return nil, fmt.Errorf("invalid merge_manifest option")
-		}
+	mergeManifest, err := parseBool(cfg["merge_manifest"])
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid merge_manifest option")
+	}
+
+	ociRef, err := parseBool(cfg["oci_ref"])
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid oci_ref option")
+	}
+
+	if ociRef && fsVersion != "6" {
+		logrus.Warn("forcibly using fs version 6 when oci_ref option enabled")
+		fsVersion = "6"
 	}
 
 	return &Driver{
@@ -106,6 +126,7 @@ func New(cfg map[string]string) (*Driver, error) {
 		compressor:    compressor,
 		chunkDictRef:  chunkDictRef,
 		mergeManifest: mergeManifest,
+		ociRef:        ociRef,
 		backend:       _backend,
 	}, nil
 }
@@ -141,26 +162,30 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*
 		chunkDictPath = chunkDictInfo.BootstrapPath
 	}
 
-	convertOpt := nydusify.PackOption{
-		FsVersion:     d.fsVersion,
-		Compressor:    d.compressor,
-		BuilderPath:   d.builderPath,
-		WorkDir:       d.workDir,
-		ChunkDictPath: chunkDictPath,
-		Backend:       d.backend,
+	packOpt := nydusify.PackOption{
+		WorkDir:          d.workDir,
+		BuilderPath:      d.builderPath,
+		FsVersion:        d.fsVersion,
+		PrefetchPatterns: "/",
+		ChunkDictPath:    chunkDictPath,
+		Compressor:       d.compressor,
+		Backend:          d.backend,
+		OCIRef:           d.ociRef,
+	}
+	mergeOpt := nydusify.MergeOption{
+		WorkDir:          packOpt.WorkDir,
+		BuilderPath:      packOpt.BuilderPath,
+		FsVersion:        packOpt.FsVersion,
+		ChunkDictPath:    packOpt.ChunkDictPath,
+		PrefetchPatterns: packOpt.PrefetchPatterns,
+		Backend:          packOpt.Backend,
+		OCIRef:           packOpt.OCIRef,
 	}
 	convertHooks := converter.ConvertHooks{
-		PostConvertHook: nydusify.ConvertHookFunc(nydusify.MergeOption{
-			WorkDir:          convertOpt.WorkDir,
-			BuilderPath:      convertOpt.BuilderPath,
-			FsVersion:        convertOpt.FsVersion,
-			ChunkDictPath:    convertOpt.ChunkDictPath,
-			PrefetchPatterns: convertOpt.PrefetchPatterns,
-			Backend:          convertOpt.Backend,
-		}),
+		PostConvertHook: nydusify.ConvertHookFunc(mergeOpt),
 	}
 	indexConvertFunc := converter.IndexConvertFuncWithHook(
-		nydusify.LayerConvertFunc(convertOpt),
+		nydusify.LayerConvertFunc(packOpt),
 		true,
 		platforms.DefaultStrict(),
 		convertHooks,
