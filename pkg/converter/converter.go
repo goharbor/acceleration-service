@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/containerd/containerd/reference/docker"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
@@ -56,6 +57,17 @@ func NewLocalConverter(opts ...ConvertOpt) (*LocalConverter, error) {
 }
 
 func (cvt *LocalConverter) Convert(ctx context.Context, source, target string) error {
+	sourceNamed, err := docker.ParseDockerRef(source)
+	if err != nil {
+		return errors.Wrap(err, "parse source reference")
+	}
+	targetNamed, err := docker.ParseDockerRef(target)
+	if err != nil {
+		return errors.Wrap(err, "parse target reference")
+	}
+	source = sourceNamed.String()
+	target = targetNamed.String()
+
 	logger.Infof("pulling image %s", source)
 	start := time.Now()
 	if err := cvt.provider.Pull(ctx, source); err != nil {
