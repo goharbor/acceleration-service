@@ -15,8 +15,13 @@
 package config
 
 import (
+	"encoding/base64"
+	"fmt"
 	"io/ioutil"
+	"net/url"
+	"strings"
 
+	"github.com/goharbor/acceleration-service/pkg/remote"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -88,4 +93,46 @@ func Parse(configPath string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func (cfg *Config) Host(ref string) (remote.CredentialFunc, bool, error) {
+	authorizer := func(ref string) (*SourceConfig, error) {
+		refURL, err := url.Parse(fmt.Sprintf("dummy://%s", ref))
+		if err != nil {
+			return nil, errors.Wrap(err, "parse reference of source image")
+		}
+
+		auth, ok := cfg.Provider.Source[refURL.Host]
+		if !ok {
+			return nil, fmt.Errorf("not found matched hostname %s in config", refURL.Host)
+		}
+
+		return &auth, nil
+	}
+
+	auth, err := authorizer(ref)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return func(host string) (string, string, error) {
+		auth, err := authorizer(host)
+		if err != nil {
+			return "", "", err
+		}
+
+		// Leave auth empty if no authorization be required
+		if strings.TrimSpace(auth.Auth) == "" {
+			return "", "", nil
+		}
+		decoded, err := base64.StdEncoding.DecodeString(auth.Auth)
+		if err != nil {
+			return "", "", errors.Wrap(err, "decode base64 encoded auth string")
+		}
+		ary := strings.Split(string(decoded), ":")
+		if len(ary) != 2 {
+			return "", "", errors.New("invalid base64 encoded auth string")
+		}
+		return ary[0], ary[1], nil
+	}, auth.Insecure, nil
 }

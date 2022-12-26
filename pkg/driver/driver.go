@@ -20,7 +20,6 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
-	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver/estargz"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus"
@@ -31,10 +30,11 @@ import (
 type Driver interface {
 	// Convert converts the source image to target image, where
 	// content parameter provides necessary image utils, image
-	// content store and so on. If conversion successful, the
+	// content store and so on, where source parameter is the
+	// original image reference. If conversion successful, the
 	// converted image manifest will be returned, otherwise a
 	// non-nil error will be returned.
-	Convert(context.Context, content.Provider) (*ocispec.Descriptor, error)
+	Convert(ctx context.Context, content content.Provider, source string) (*ocispec.Descriptor, error)
 
 	// Name gets the driver type name, it is used to identify
 	// different accelerated image formats.
@@ -45,13 +45,13 @@ type Driver interface {
 	Version() string
 }
 
-func NewLocalDriver(cfg *config.DriverConfig) (Driver, error) {
-	switch cfg.Type {
+func NewLocalDriver(typ string, config map[string]string) (Driver, error) {
+	switch typ {
 	case "nydus":
-		return nydus.New(cfg.Config)
+		return nydus.New(config)
 	case "estargz":
-		return estargz.New(cfg.Config)
+		return estargz.New(config)
 	default:
-		return nil, fmt.Errorf("unsupported driver %s", cfg.Type)
+		return nil, fmt.Errorf("unsupported driver %s", typ)
 	}
 }

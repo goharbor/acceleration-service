@@ -139,18 +139,22 @@ func (d *Driver) Version() string {
 	return ""
 }
 
-func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider) (*ocispec.Descriptor, error) {
-	desc, err := d.convert(ctx, provider)
+func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, source string) (*ocispec.Descriptor, error) {
+	image, err := provider.Image(ctx, source)
+	if err != nil {
+		return nil, errors.Wrap(err, "get source image")
+	}
+	desc, err := d.convert(ctx, provider, *image)
 	if err != nil {
 		return nil, err
 	}
 	if d.mergeManifest {
-		return d.makeManifestIndex(ctx, provider.ContentStore(), provider.Image().Target(), *desc)
+		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc)
 	}
 	return desc, err
 }
 
-func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*ocispec.Descriptor, error) {
+func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, source ocispec.Descriptor) (*ocispec.Descriptor, error) {
 	cs := provider.ContentStore()
 
 	chunkDictPath := ""
@@ -190,7 +194,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider) (*
 		platforms.DefaultStrict(),
 		convertHooks,
 	)
-	return indexConvertFunc(ctx, cs, provider.Image().Target())
+	return indexConvertFunc(ctx, cs, source)
 }
 
 func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, nydus ocispec.Descriptor) (*ocispec.Descriptor, error) {

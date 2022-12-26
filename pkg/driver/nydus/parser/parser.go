@@ -17,19 +17,14 @@ package parser
 import (
 	"context"
 
-	"github.com/containerd/containerd"
 	imageContent "github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/images"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	"github.com/goharbor/acceleration-service/pkg/content"
 	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/utils"
 )
-
-var logger = logrus.WithField("module", "nydus-driver")
 
 type Parser struct {
 	content content.Provider
@@ -47,29 +42,18 @@ func (parser *Parser) PullAsChunkDict(ctx context.Context, ref string, usePlainH
 	if usePlainHTTP {
 		parser.content.UsePlainHTTP()
 	}
-	resolver, err := parser.content.Resolver(ctx, ref)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "get resolver for %s", ref)
+
+	if err := parser.content.Pull(ctx, ref); err != nil {
+		return nil, nil, errors.Wrap(err, "pull chunk dict image")
 	}
-	opts := []containerd.RemoteOpt{
-		containerd.WithPlatformMatcher(nydusUtils.NydusPlatformComparer{}),
-		containerd.WithImageHandler(images.HandlerFunc(
-			func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-				if images.IsLayerType(desc.MediaType) {
-					logger.Debugf("pulling chunk dict image layer %s", desc.Digest)
-				}
-				return nil, nil
-			},
-		)),
-		containerd.WithResolver(resolver),
-	}
-	image, err := parser.content.Client().Fetch(ctx, ref, opts...)
+
+	image, err := parser.content.Image(ctx, ref)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "pull chunk dict image %s", ref)
+		return nil, nil, errors.Wrap(err, "get image from content store")
 	}
 
 	manifest := ocispec.Manifest{}
-	_, err = utils.ReadJSON(ctx, cs, &manifest, image.Target)
+	_, err = utils.ReadJSON(ctx, cs, &manifest, *image)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "read manifest json")
 	}
