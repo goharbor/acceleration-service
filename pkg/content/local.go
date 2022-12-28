@@ -22,7 +22,6 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
-	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -35,15 +34,18 @@ type LocalProvider struct {
 	usePlainHTTP bool
 	client       *containerd.Client
 	hosts        remote.HostFunc
+	platformMC   platforms.MatchComparer
 }
 
 func NewLocalProvider(
 	client *containerd.Client,
 	hosts remote.HostFunc,
+	platformMC platforms.MatchComparer,
 ) (Provider, error) {
 	return &LocalProvider{
-		client: client,
-		hosts:  hosts,
+		client:     client,
+		hosts:      hosts,
+		platformMC: platformMC,
 	}, nil
 }
 
@@ -65,12 +67,9 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		return err
 	}
 
-	// TODO: enable configuring the target platforms.
-	platformMatcher := nydusUtils.ExcludeNydusPlatformComparer{MatchComparer: platforms.All}
-
 	opts := []containerd.RemoteOpt{
 		// TODO: sets max concurrent downloaded layer limit by containerd.WithMaxConcurrentDownloads.
-		containerd.WithPlatformMatcher(platformMatcher),
+		containerd.WithPlatformMatcher(pvd.platformMC),
 		containerd.WithImageHandler(images.HandlerFunc(
 			func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 				if images.IsLayerType(desc.MediaType) {
@@ -97,8 +96,13 @@ func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref
 		return err
 	}
 
+	opts := []containerd.RemoteOpt{
+		containerd.WithResolver(resolver),
+		containerd.WithPlatformMatcher(pvd.platformMC),
+	}
+
 	// TODO: sets max concurrent uploaded layer limit by containerd.WithMaxConcurrentUploadedLayers.
-	return pvd.client.Push(ctx, ref, desc, containerd.WithResolver(resolver))
+	return pvd.client.Push(ctx, ref, desc, opts...)
 }
 
 func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descriptor, error) {

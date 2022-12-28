@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/goharbor/acceleration-service/pkg/content"
@@ -45,12 +46,12 @@ type Driver interface {
 	Version() string
 }
 
-func NewLocalDriver(typ string, config map[string]string) (Driver, error) {
+func NewLocalDriver(typ string, config map[string]string, platformMC platforms.MatchComparer) (Driver, error) {
 	switch typ {
 	case "nydus":
-		return nydus.New(config)
+		return nydus.New(config, platformMC)
 	case "estargz":
-		return estargz.New(config)
+		return estargz.New(config, platformMC)
 	default:
 		return nil, fmt.Errorf("unsupported driver %s", typ)
 	}

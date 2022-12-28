@@ -56,6 +56,7 @@ type Driver struct {
 	chunkSize        string
 	prefetchPatterns string
 	backend          backend.Backend
+	platformMC       platforms.MatchComparer
 }
 
 func parseBool(v string) (bool, error) {
@@ -70,7 +71,7 @@ func parseBool(v string) (bool, error) {
 	return parsed, nil
 }
 
-func New(cfg map[string]string) (*Driver, error) {
+func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, error) {
 	workDir := cfg["work_dir"]
 	if workDir == "" {
 		workDir = os.TempDir()
@@ -153,6 +154,7 @@ func New(cfg map[string]string) (*Driver, error) {
 		chunkSize:        fsChunkSize,
 		prefetchPatterns: prefetchPatterns,
 		backend:          _backend,
+		platformMC:       platformMC,
 	}, nil
 }
 
@@ -218,7 +220,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 	indexConvertFunc := converter.IndexConvertFuncWithHook(
 		nydusify.LayerConvertFunc(packOpt),
 		d.docker2oci,
-		platforms.DefaultStrict(),
+		d.platformMC,
 		convertHooks,
 	)
 	return indexConvertFunc(ctx, cs, source)

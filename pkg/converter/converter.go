@@ -22,9 +22,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/reference/docker"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver"
+	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/utils"
 )
@@ -32,8 +34,9 @@ import (
 var logger = logrus.WithField("module", "converter")
 
 type Converter struct {
-	driver   driver.Driver
-	provider content.Provider
+	driver     driver.Driver
+	provider   content.Provider
+	platformMC platforms.MatchComparer
 }
 
 func New(opts ...ConvertOpt) (*Converter, error) {
@@ -44,14 +47,21 @@ func New(opts ...ConvertOpt) (*Converter, error) {
 		}
 	}
 
-	driver, err := driver.NewLocalDriver(options.driverType, options.driverConfig)
+	platformMC := platforms.All
+	if options.platformMC != nil {
+		platformMC = options.platformMC
+	}
+	platformMC = nydusUtils.ExcludeNydusPlatformComparer{MatchComparer: platformMC}
+
+	driver, err := driver.NewLocalDriver(options.driverType, options.driverConfig, platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "create driver")
 	}
 
 	handler := &Converter{
-		driver:   driver,
-		provider: options.provider,
+		driver:     driver,
+		provider:   options.provider,
+		platformMC: platformMC,
 	}
 
 	return handler, nil
