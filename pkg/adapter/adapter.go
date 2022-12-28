@@ -47,7 +47,7 @@ type LocalAdapter struct {
 	client *containerd.Client
 	rule   *Rule
 	worker *Worker
-	cvt    *converter.LocalConverter
+	cvt    *converter.Converter
 }
 
 func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
@@ -64,7 +64,7 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, errors.Wrap(err, "create content provider")
 	}
 
-	cvt, err := converter.NewLocalConverter(
+	cvt, err := converter.New(
 		converter.WithProvider(provider),
 		converter.WithDriver(cfg.Converter.Driver.Type, cfg.Converter.Driver.Config),
 	)

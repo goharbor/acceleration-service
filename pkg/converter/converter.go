@@ -26,16 +26,17 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
+	"github.com/goharbor/acceleration-service/pkg/utils"
 )
 
 var logger = logrus.WithField("module", "converter")
 
-type LocalConverter struct {
+type Converter struct {
 	driver   driver.Driver
 	provider content.Provider
 }
 
-func NewLocalConverter(opts ...ConvertOpt) (*LocalConverter, error) {
+func New(opts ...ConvertOpt) (*Converter, error) {
 	var options ConvertOpts
 	for _, opt := range opts {
 		if err := opt(&options); err != nil {
@@ -48,7 +49,7 @@ func NewLocalConverter(opts ...ConvertOpt) (*LocalConverter, error) {
 		return nil, errors.Wrap(err, "create driver")
 	}
 
-	handler := &LocalConverter{
+	handler := &Converter{
 		driver:   driver,
 		provider: options.provider,
 	}
@@ -56,7 +57,27 @@ func NewLocalConverter(opts ...ConvertOpt) (*LocalConverter, error) {
 	return handler, nil
 }
 
-func (cvt *LocalConverter) Convert(ctx context.Context, source, target string) error {
+func (cvt *Converter) pull(ctx context.Context, source string) error {
+	if err := cvt.provider.Pull(ctx, source); err != nil {
+		return errors.Wrapf(err, "pull image %s", source)
+	}
+
+	image, err := cvt.provider.Image(ctx, source)
+	if err != nil {
+		return errors.Wrapf(err, "get image %s", source)
+	}
+
+	// Write a diff id label of layer in content store for simplifying
+	// diff id calculation to speed up the conversion.
+	// See: https://github.com/containerd/containerd/blob/e4fefea5544d259177abb85b64e428702ac49c97/images/diffid.go#L49
+	if err := utils.UpdateLayerDiffID(ctx, cvt.provider.ContentStore(), *image); err != nil {
+		return errors.Wrap(err, "update layer diff id")
+	}
+
+	return nil
+}
+
+func (cvt *Converter) Convert(ctx context.Context, source, target string) error {
 	sourceNamed, err := docker.ParseDockerRef(source)
 	if err != nil {
 		return errors.Wrap(err, "parse source reference")
@@ -70,11 +91,11 @@ func (cvt *LocalConverter) Convert(ctx context.Context, source, target string) e
 
 	logger.Infof("pulling image %s", source)
 	start := time.Now()
-	if err := cvt.provider.Pull(ctx, source); err != nil {
+	if err := cvt.pull(ctx, source); err != nil {
 		if errdefs.NeedsRetryWithHTTP(err) {
 			logger.Infof("try to pull with plain HTTP for %s", source)
 			cvt.provider.UsePlainHTTP()
-			if err := cvt.provider.Pull(ctx, source); err != nil {
+			if err := cvt.pull(ctx, source); err != nil {
 				return errors.Wrap(err, "try to pull image")
 			}
 		} else {

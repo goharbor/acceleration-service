@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/labels"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 // Ported from containerd project, copyright The containerd Authors.
@@ -78,4 +81,49 @@ func GetManifests(ctx context.Context, provider content.Provider, desc ocispec.D
 	}
 
 	return descs, nil
+}
+
+func UpdateLayerDiffID(ctx context.Context, cs content.Store, image ocispec.Descriptor) error {
+	maniDescs, err := GetManifests(ctx, cs, image)
+	if err != nil {
+		return errors.Wrap(err, "get manifests")
+	}
+
+	for _, desc := range maniDescs {
+		bytes, err := content.ReadBlob(ctx, cs, desc)
+		if err != nil {
+			return errors.Wrap(err, "read manifest")
+		}
+
+		var manifest ocispec.Manifest
+		if err := json.Unmarshal(bytes, &manifest); err != nil {
+			return errors.Wrap(err, "unmarshal manifest")
+		}
+
+		diffIDs, err := images.RootFS(ctx, cs, manifest.Config)
+		if err != nil {
+			return errors.Wrap(err, "get diff ids from config")
+		}
+		if len(manifest.Layers) != len(diffIDs) {
+			return fmt.Errorf("unmatched layers between manifest and config: %d != %d", len(manifest.Layers), len(diffIDs))
+		}
+
+		for idx, diffID := range diffIDs {
+			layerDesc := manifest.Layers[idx]
+			info, err := cs.Info(ctx, layerDesc.Digest)
+			if err != nil {
+				return errors.Wrap(err, "get layer info")
+			}
+			if info.Labels == nil {
+				info.Labels = map[string]string{}
+			}
+			info.Labels[labels.LabelUncompressed] = diffID.String()
+			_, err = cs.Update(ctx, info)
+			if err != nil {
+				return errors.Wrap(err, "update layer label")
+			}
+		}
+	}
+
+	return nil
 }
