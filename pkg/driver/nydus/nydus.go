@@ -44,14 +44,19 @@ type chunkDictInfo struct {
 }
 
 type Driver struct {
-	workDir       string
-	builderPath   string
-	fsVersion     string
-	compressor    string
-	chunkDictRef  string
-	mergeManifest bool
-	ociRef        bool
-	backend       backend.Backend
+	workDir          string
+	builderPath      string
+	fsVersion        string
+	compressor       string
+	chunkDictRef     string
+	mergeManifest    bool
+	ociRef           bool
+	docker2oci       bool
+	alignedChunk     bool
+	chunkSize        string
+	prefetchPatterns string
+	backend          backend.Backend
+	platformMC       platforms.MatchComparer
 }
 
 func parseBool(v string) (bool, error) {
@@ -66,7 +71,7 @@ func parseBool(v string) (bool, error) {
 	return parsed, nil
 }
 
-func New(cfg map[string]string) (*Driver, error) {
+func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, error) {
 	workDir := cfg["work_dir"]
 	if workDir == "" {
 		workDir = os.TempDir()
@@ -83,12 +88,29 @@ func New(cfg map[string]string) (*Driver, error) {
 	var _backend backend.Backend
 	backendType := cfg["backend_type"]
 	backendConfig := cfg["backend_config"]
+	backendForcePush, err := parseBool(cfg["backend_force_push"])
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid backend_force_push option")
+	}
 	if backendType != "" && backendConfig != "" {
-		_backend, err = backend.NewBackend(backendType, []byte(backendConfig))
+		_backend, err = backend.NewBackend(backendType, []byte(backendConfig), backendForcePush)
 		if err != nil {
 			return nil, errors.Wrap(err, "create blob backend")
 		}
 	}
+
+	docker2oci, err := parseBool(cfg["docker2oci"])
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid docker2oci option")
+	}
+
+	fsAlignChunk, err := parseBool(cfg["fs_align_chunk"])
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid fs_align_chunk option")
+	}
+
+	fsChunkSize := cfg["fs_chunk_size"]
+	prefetchPatterns := cfg["prefetch_patterns"]
 
 	fsVersion := cfg["fs_version"]
 	if fsVersion == "" {
@@ -120,14 +142,19 @@ func New(cfg map[string]string) (*Driver, error) {
 	}
 
 	return &Driver{
-		workDir:       workDir,
-		builderPath:   builderPath,
-		fsVersion:     fsVersion,
-		compressor:    compressor,
-		chunkDictRef:  chunkDictRef,
-		mergeManifest: mergeManifest,
-		ociRef:        ociRef,
-		backend:       _backend,
+		workDir:          workDir,
+		builderPath:      builderPath,
+		fsVersion:        fsVersion,
+		compressor:       compressor,
+		chunkDictRef:     chunkDictRef,
+		mergeManifest:    mergeManifest,
+		ociRef:           ociRef,
+		docker2oci:       docker2oci,
+		alignedChunk:     fsAlignChunk,
+		chunkSize:        fsChunkSize,
+		prefetchPatterns: prefetchPatterns,
+		backend:          _backend,
+		platformMC:       platformMC,
 	}, nil
 }
 
@@ -170,11 +197,13 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		WorkDir:          d.workDir,
 		BuilderPath:      d.builderPath,
 		FsVersion:        d.fsVersion,
-		PrefetchPatterns: "/",
+		PrefetchPatterns: d.prefetchPatterns,
 		ChunkDictPath:    chunkDictPath,
 		Compressor:       d.compressor,
 		Backend:          d.backend,
 		OCIRef:           d.ociRef,
+		AlignedChunk:     d.alignedChunk,
+		ChunkSize:        d.chunkSize,
 	}
 	mergeOpt := nydusify.MergeOption{
 		WorkDir:          packOpt.WorkDir,
@@ -190,8 +219,8 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 	}
 	indexConvertFunc := converter.IndexConvertFuncWithHook(
 		nydusify.LayerConvertFunc(packOpt),
-		true,
-		platforms.DefaultStrict(),
+		d.docker2oci,
+		d.platformMC,
 		convertHooks,
 	)
 	return indexConvertFunc(ctx, cs, source)

@@ -73,6 +73,7 @@ type ConverterConfig struct {
 	Worker           int              `yaml:"worker"`
 	Driver           DriverConfig     `yaml:"driver"`
 	HarborAnnotation bool             `yaml:"harbor_annotation"`
+	Platforms        string           `yaml:"platforms"`
 	Rules            []ConversionRule `yaml:"rules"`
 }
 

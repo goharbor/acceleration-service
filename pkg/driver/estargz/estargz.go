@@ -28,11 +28,12 @@ import (
 )
 
 type Driver struct {
-	cfg map[string]string
+	cfg        map[string]string
+	platformMC platforms.MatchComparer
 }
 
-func New(cfg map[string]string) (*Driver, error) {
-	return &Driver{cfg}, nil
+func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, error) {
+	return &Driver{cfg, platformMC}, nil
 }
 
 func (d *Driver) Convert(ctx context.Context, p content.Provider, ref string) (*ocispec.Descriptor, error) {
@@ -40,12 +41,11 @@ func (d *Driver) Convert(ctx context.Context, p content.Provider, ref string) (*
 	if err != nil {
 		return nil, errors.Wrap(err, "parse estargz conversion options")
 	}
-	platformMC := platforms.All // TODO: enable to configure the target platforms
 	image, err := p.Image(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "get source image")
 	}
-	return converter.DefaultIndexConvertFunc(estargzconvert.LayerConvertFunc(opts...), docker2oci, platformMC)(
+	return converter.DefaultIndexConvertFunc(estargzconvert.LayerConvertFunc(opts...), docker2oci, d.platformMC)(
 		ctx, p.ContentStore(), *image)
 }
 

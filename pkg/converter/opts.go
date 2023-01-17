@@ -15,6 +15,7 @@
 package converter
 
 import (
+	"github.com/containerd/containerd/platforms"
 	"github.com/goharbor/acceleration-service/pkg/content"
 )
 
@@ -22,6 +23,7 @@ type ConvertOpts struct {
 	provider     content.Provider
 	driverType   string
 	driverConfig map[string]string
+	platformMC   platforms.MatchComparer
 }
 
 type ConvertOpt func(opts *ConvertOpts) error
@@ -37,6 +39,13 @@ func WithDriver(typ string, config map[string]string) ConvertOpt {
 	return func(opts *ConvertOpts) error {
 		opts.driverType = typ
 		opts.driverConfig = config
+		return nil
+	}
+}
+
+func WithPlatform(platformMC platforms.MatchComparer) ConvertOpt {
+	return func(opts *ConvertOpts) error {
+		opts.platformMC = platformMC
 		return nil
 	}
 }

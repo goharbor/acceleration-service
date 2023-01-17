@@ -36,6 +36,8 @@ converter:
   worker: 5
   # enable to add harbor specified annotations to converted image for tracking.
   harbor_annotation: true
+  # only convert images for specific platforms, leave empty for all platforms.
+  # platforms: linux/amd64,linux/arm64
   driver:
     # accelerator driver type: `nydus`
     type: nydus
@@ -44,31 +46,10 @@ converter:
 
       # `nydus-image` binary path, download it from:
       # https://github.com/dragonflyoss/image-service/releases (require v2.0.0 or higher)
-      builder: nydus-image
+      # builder: nydus-image
 
       # convert to OCI-referenced nydus zran image.
       oci_ref: true
-
-      # specify nydus format version, possible values: `5`, `6` (EROFS-compatible), default is `6`
-      # fs_version: 6
-
-      # specify nydus blob compression algorithm, possible values: `none`, `lz4_block`, `gzip`, `zstd`, default is `zstd`
-      # compressor: zstd
-
-      # ensure that both OCIv1 manifest and nydus manifest are present as manifest index in the target image.
-      # it's used for containerd to support running OCIv1 image or nydus image simultaneously with a single image reference.
-      # note: please ensure that OCIv1 manifest already exists in target image reference.
-      # merge_manifest: true
-
-      # nydus chunk dict image reference, used for chunk-leveled data deduplication.
-      # chunk_dict_ref: localhost/chunk_dict/image:latest
-
-      # specify a storage backend for storing nydus blob, optional, possible values: oss, localfs
-      # backend_type: oss
-      # backend_config: '{"endpoint":"","access_key_id":"","access_key_secret":"","bucket_name":""}'
-
-      # backend_type: localfs
-      # backend_config: '{"dir":"/path/to/dir"}'
   rules:
     # add suffix to tag of source image reference as target image reference
     - tag_suffix: -nydus-oci-ref

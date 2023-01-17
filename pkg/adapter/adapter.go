@@ -17,6 +17,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/containerd/containerd"
 	"github.com/pkg/errors"
@@ -27,6 +28,7 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/converter"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/metrics"
+	"github.com/goharbor/acceleration-service/pkg/platformutil"
 	"github.com/goharbor/acceleration-service/pkg/task"
 )
 
@@ -47,7 +49,7 @@ type LocalAdapter struct {
 	client *containerd.Client
 	rule   *Rule
 	worker *Worker
-	cvt    *converter.LocalConverter
+	cvt    *converter.Converter
 }
 
 func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
@@ -59,14 +61,21 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, errors.Wrap(err, "create containerd client")
 	}
 
-	provider, err := content.NewLocalProvider(client, cfg.Host)
+	allPlatforms := len(strings.TrimSpace(cfg.Converter.Platforms)) == 0
+	platformMC, err := platformutil.ParsePlatforms(allPlatforms, cfg.Converter.Platforms)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid platform configuration")
+	}
+
+	provider, err := content.NewLocalProvider(client, cfg.Host, platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "create content provider")
 	}
 
-	cvt, err := converter.NewLocalConverter(
+	cvt, err := converter.New(
 		converter.WithProvider(provider),
 		converter.WithDriver(cfg.Converter.Driver.Type, cfg.Converter.Driver.Config),
+		converter.WithPlatform(platformMC),
 	)
 	if err != nil {
 		return nil, err
