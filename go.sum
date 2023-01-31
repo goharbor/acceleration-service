@@ -375,8 +375,9 @@ github.com/containerd/nri v0.1.0/go.mod h1:lmxnXF6oMkbqs39FiCt1s0R2HSMhcLel9vNL3
 github.com/containerd/stargz-snapshotter v0.13.0 h1:3zr1/IkW1aEo6cMYTQeZ4L2jSuCN+F4kgGfjnuowe4U=
 github.com/containerd/stargz-snapshotter v0.13.0/go.mod h1:01uOvoNzN1T4kV+8HeVt9p29esO5/61x8+VP/KU4fvQ=
 github.com/containerd/stargz-snapshotter/estargz v0.4.1/go.mod h1:x7Q9dg9QYb4+ELgxmo4gBUeJB0tl5dqH1Sdz0nJU1QM=
-github.com/containerd/stargz-snapshotter/estargz v0.13.0 h1:fD7AwuVV+B40p0d9qVkH/Au1qhp8hn/HWJHIYjpEcfw=
 github.com/containerd/stargz-snapshotter/estargz v0.13.0/go.mod h1:m+9VaGJGlhCnrcEUod8mYumTmRgblwd3rC5UCEh2Yp0=
+github.com/containerd/stargz-snapshotter/estargz v0.14.1 h1:n9M2GDSWM96pyipFTA0DaU+zdtzi3Iwsnj/rIHr1yFM=
+github.com/containerd/stargz-snapshotter/estargz v0.14.1/go.mod h1:uPtMw6ucGJYwImjhxk/oghZmfElF/841u86wReNggNk=
 github.com/containerd/ttrpc v0.0.0-20190828154514-0e0f228740de/go.mod h1:PvCDdDGpgqzQIzDW1TphrGLssLDZp2GuS+X5DkEJB8o=
 github.com/containerd/ttrpc v0.0.0-20190828172938-92c8520ef9f8/go.mod h1:PvCDdDGpgqzQIzDW1TphrGLssLDZp2GuS+X5DkEJB8o=
 github.com/containerd/ttrpc v0.0.0-20191028202541-4f1b8fe65a5c/go.mod h1:LPm1u0xBw8r8NOKoOdNMeVHSawSsltak+Ihv+etqsE8=
@@ -957,8 +958,9 @@ github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+o
 github.com/klauspost/compress v1.9.5/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
 github.com/klauspost/compress v1.11.3/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.13/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
-github.com/klauspost/compress v1.15.12 h1:YClS/PImqYbn+UILDnqxQCZ3RehC9N318SU3kElDUEM=
 github.com/klauspost/compress v1.15.12/go.mod h1:QPwzmACJjUTFsnSHH934V6woptycfrDDJnH7hvFVbGM=
+github.com/klauspost/compress v1.15.15 h1:EF27CXIuDsYJ6mmvtBRlEuB2UVOqHG1tAXgZ7yIO+lw=
+github.com/klauspost/compress v1.15.15/go.mod h1:ZcK2JAFqKOpnBlxcLsJzYfrS9X1akm9fHZNnD9+Vo/4=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.2/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.3/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=

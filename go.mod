@@ -6,7 +6,7 @@ require (
 	github.com/containerd/containerd v1.6.15
 	github.com/containerd/nydus-snapshotter v0.3.1
 	github.com/containerd/stargz-snapshotter v0.13.0
-	github.com/containerd/stargz-snapshotter/estargz v0.13.0
+	github.com/containerd/stargz-snapshotter/estargz v0.14.1
 	github.com/docker/cli v20.10.22+incompatible
 	github.com/goharbor/harbor/src v0.0.0-20211021012518-bc6a7f65a6fa
 	github.com/google/uuid v1.3.0
@@ -74,7 +74,7 @@ require (
 	github.com/gomodule/redigo v2.0.0+incompatible // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.15.12 // indirect
+	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/lib/pq v1.10.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
