@@ -9,6 +9,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/labels"
+	"github.com/containerd/containerd/platforms"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -59,32 +60,18 @@ func WriteJSON(ctx context.Context, cs content.Store, x interface{}, oldDesc oci
 	return &newDesc, nil
 }
 
-func GetManifests(ctx context.Context, provider content.Provider, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-	var descs []ocispec.Descriptor
+func GetManifests(ctx context.Context, provider content.Provider, desc ocispec.Descriptor, platform platforms.MatchComparer) ([]ocispec.Descriptor, error) {
 	switch desc.MediaType {
-	case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-		descs = append(descs, desc)
-	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-		p, err := content.ReadBlob(ctx, provider, desc)
-		if err != nil {
-			return nil, err
-		}
-
-		var index ocispec.Index
-		if err := json.Unmarshal(p, &index); err != nil {
-			return nil, err
-		}
-
-		descs = append(descs, index.Manifests...)
-	default:
-		return nil, nil
+	case ocispec.MediaTypeImageIndex, images.MediaTypeDockerSchema2ManifestList:
+		return images.FilterPlatforms(images.ChildrenHandler(provider), platform)(ctx, desc)
+	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
+		return []ocispec.Descriptor{desc}, nil
 	}
-
-	return descs, nil
+	return nil, nil
 }
 
-func UpdateLayerDiffID(ctx context.Context, cs content.Store, image ocispec.Descriptor) error {
-	maniDescs, err := GetManifests(ctx, cs, image)
+func UpdateLayerDiffID(ctx context.Context, cs content.Store, image ocispec.Descriptor, platform platforms.MatchComparer) error {
+	maniDescs, err := GetManifests(ctx, cs, image, platform)
 	if err != nil {
 		return errors.Wrap(err, "get manifests")
 	}

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/platforms"
-	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -33,11 +32,7 @@ func ParsePlatforms(all bool, ss string) (platforms.MatchComparer, error) {
 			platforms = append(platforms, plat)
 		}
 	}
-	platformMC, err := NewMatchComparer(all, platforms)
-	if err != nil {
-		return nil, err
-	}
-	return nydusUtils.ExcludeNydusPlatformComparer{MatchComparer: platformMC}, nil
+	return NewMatchComparer(all, platforms)
 }
 
 // Ported from nerdctl project, copyright The containerd Authors.

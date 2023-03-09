@@ -110,7 +110,7 @@ func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descr
 	if err != nil {
 		return nil, err
 	}
-	target := image.Target()
+	target := containerd.NewImageWithPlatform(pvd.client, image.Metadata(), pvd.platformMC).Target()
 	return &target, nil
 }
 

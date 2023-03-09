@@ -21,7 +21,6 @@ import (
 	"io"
 	"unsafe"
 
-	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -85,40 +84,6 @@ func IsNydusManifest(manifest *ocispec.Manifest) bool {
 		}
 	}
 	return false
-}
-
-type ExcludeNydusPlatformComparer struct {
-	platforms.MatchComparer
-}
-
-func (c ExcludeNydusPlatformComparer) Match(platform ocispec.Platform) bool {
-	for _, key := range platform.OSFeatures {
-		if key == ManifestOSFeatureNydus {
-			return false
-		}
-	}
-	return c.MatchComparer.Match(platform)
-}
-
-func (c ExcludeNydusPlatformComparer) Less(a, b ocispec.Platform) bool {
-	return c.MatchComparer.Less(a, b)
-}
-
-type NydusPlatformComparer struct {
-	platforms.MatchComparer
-}
-
-func (c NydusPlatformComparer) Match(platform ocispec.Platform) bool {
-	for _, key := range platform.OSFeatures {
-		if key == ManifestOSFeatureNydus {
-			return true
-		}
-	}
-	return false
-}
-
-func (c NydusPlatformComparer) Less(a, b ocispec.Platform) bool {
-	return c.MatchComparer.Less(a, b)
 }
 
 func GetRawBootstrapFromV6(file io.ReadSeeker) (io.Reader, error) {

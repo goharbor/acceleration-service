@@ -79,10 +79,12 @@ func NewDockerConfigCredFunc() CredentialFunc {
 
 func NewResolver(insecure, plainHTTP bool, credFunc CredentialFunc) remotes.Resolver {
 	registryHosts := docker.ConfigureDefaultRegistries(
-		docker.WithAuthorizer(docker.NewAuthorizer(
-			newDefaultClient(insecure),
-			credFunc,
-		)),
+		docker.WithAuthorizer(
+			docker.NewDockerAuthorizer(
+				docker.WithAuthClient(newDefaultClient(insecure)),
+				docker.WithAuthCreds(credFunc),
+			),
+		),
 		docker.WithClient(newDefaultClient(insecure)),
 		docker.WithPlainHTTP(func(host string) (bool, error) {
 			return plainHTTP, nil
