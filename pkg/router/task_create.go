@@ -19,8 +19,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/goharbor/harbor/src/controller/event"
-	"github.com/goharbor/harbor/src/pkg/notifier/model"
+	"github.com/goharbor/acceleration-service/pkg/model"
 	"github.com/labstack/echo/v4"
 
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
@@ -41,7 +40,7 @@ func (r *LocalRouter) CreateTask(ctx echo.Context) error {
 		)
 	}
 
-	if payload.Type != event.TopicPushArtifact {
+	if payload.Type != model.TopicPushArtifact {
 		logger.Warnf("unsupported payload type %s", payload.Type)
 		return ctx.JSON(http.StatusOK, "Ok")
 	}

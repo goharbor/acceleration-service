@@ -6,15 +6,14 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/goharbor/acceleration-service/pkg/model"
 	"github.com/goharbor/acceleration-service/pkg/task"
-	"github.com/goharbor/harbor/src/controller/event"
-	"github.com/goharbor/harbor/src/pkg/notifier/model"
 	"github.com/pkg/errors"
 )
 
 func (client *Client) CreateTask(src string, sync bool) error {
 	payload := model.Payload{
-		Type: event.TopicPushArtifact,
+		Type: model.TopicPushArtifact,
 		EventData: &model.EventData{
 			Resources: []*model.Resource{
 				{
