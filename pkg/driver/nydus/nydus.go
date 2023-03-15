@@ -28,7 +28,6 @@ import (
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
-	"github.com/goharbor/harbor/src/jobservice/logger"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -227,12 +226,12 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 }
 
 func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, nydus ocispec.Descriptor) (*ocispec.Descriptor, error) {
-	ociDescs, err := utils.GetManifests(ctx, cs, oci)
+	ociDescs, err := utils.GetManifests(ctx, cs, oci, d.platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "get oci image manifest list")
 	}
 
-	nydusDescs, err := utils.GetManifests(ctx, cs, nydus)
+	nydusDescs, err := utils.GetManifests(ctx, cs, nydus, d.platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "get nydus image manifest list")
 	}
@@ -284,7 +283,7 @@ func (d *Driver) getChunkDict(ctx context.Context, provider accelcontent.Provide
 	bootstrapReader, _, err := parser.PullAsChunkDict(ctx, d.chunkDictRef, false)
 	if err != nil {
 		if errdefs.NeedsRetryWithHTTP(err) {
-			logger.Infof("try to pull chunk dict image with plain HTTP for %s", d.chunkDictRef)
+			logrus.Infof("try to pull chunk dict image with plain HTTP for %s", d.chunkDictRef)
 			bootstrapReader, _, err = parser.PullAsChunkDict(ctx, d.chunkDictRef, true)
 			if err != nil {
 				return nil, errors.Wrapf(err, "try to pull chunk dict image %s", d.chunkDictRef)

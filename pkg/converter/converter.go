@@ -26,7 +26,6 @@ import (
 	"github.com/containerd/containerd/reference/docker"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver"
-	nydusUtils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/utils"
 )
@@ -51,7 +50,6 @@ func New(opts ...ConvertOpt) (*Converter, error) {
 	if options.platformMC != nil {
 		platformMC = options.platformMC
 	}
-	platformMC = nydusUtils.ExcludeNydusPlatformComparer{MatchComparer: platformMC}
 
 	driver, err := driver.NewLocalDriver(options.driverType, options.driverConfig, platformMC)
 	if err != nil {
@@ -80,7 +78,7 @@ func (cvt *Converter) pull(ctx context.Context, source string) error {
 	// Write a diff id label of layer in content store for simplifying
 	// diff id calculation to speed up the conversion.
 	// See: https://github.com/containerd/containerd/blob/e4fefea5544d259177abb85b64e428702ac49c97/images/diffid.go#L49
-	if err := utils.UpdateLayerDiffID(ctx, cvt.provider.ContentStore(), *image); err != nil {
+	if err := utils.UpdateLayerDiffID(ctx, cvt.provider.ContentStore(), *image, cvt.platformMC); err != nil {
 		return errors.Wrap(err, "update layer diff id")
 	}
 
