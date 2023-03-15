@@ -3,10 +3,10 @@ module github.com/goharbor/acceleration-service
 go 1.18
 
 require (
-	github.com/containerd/containerd v1.7.0-rc.1
+	github.com/containerd/containerd v1.7.0-rc.2
 	github.com/containerd/nydus-snapshotter v0.7.1
-	github.com/containerd/stargz-snapshotter v0.14.2
-	github.com/containerd/stargz-snapshotter/estargz v0.14.2
+	github.com/containerd/stargz-snapshotter v0.14.3
+	github.com/containerd/stargz-snapshotter/estargz v0.14.3
 	github.com/docker/cli v23.0.1+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.13.1
@@ -52,7 +52,7 @@ require (
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
-	github.com/containerd/ttrpc v1.1.1-0.20230127163717-32fab2374638 // indirect
+	github.com/containerd/ttrpc v1.2.0 // indirect
 	github.com/containerd/typeurl/v2 v2.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
@@ -79,7 +79,7 @@ require (
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/opencontainers/runc v1.1.4 // indirect
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1 // indirect
-	github.com/opencontainers/selinux v1.10.2 // indirect
+	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.41.0 // indirect
@@ -100,7 +100,7 @@ require (
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	google.golang.org/genproto v0.0.0-20230303212802-e74f57abe488 // indirect
+	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
 	google.golang.org/grpc v1.53.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
