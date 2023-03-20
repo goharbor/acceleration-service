@@ -6,7 +6,7 @@ require (
 	github.com/containerd/containerd v1.7.0-rc.1
 	github.com/containerd/nydus-snapshotter v0.7.1
 	github.com/containerd/stargz-snapshotter v0.14.2
-	github.com/containerd/stargz-snapshotter/estargz v0.14.2
+	github.com/containerd/stargz-snapshotter/estargz v0.14.3
 	github.com/docker/cli v23.0.1+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.13.1
