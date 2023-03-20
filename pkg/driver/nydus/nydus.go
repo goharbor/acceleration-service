@@ -211,6 +211,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		ChunkDictPath:    packOpt.ChunkDictPath,
 		PrefetchPatterns: packOpt.PrefetchPatterns,
 		Backend:          packOpt.Backend,
+		OCI:              d.docker2oci,
 		OCIRef:           packOpt.OCIRef,
 	}
 	convertHooks := converter.ConvertHooks{
