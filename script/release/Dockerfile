@@ -1,4 +1,4 @@
-FROM golang:1.18.7 AS build
+FROM golang:1.20.3 AS build
 
 ARG CONTAINERD_VERSION=1.5.7
 ARG NYDUS_VERSION=v2.1.5
