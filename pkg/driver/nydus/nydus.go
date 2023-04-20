@@ -53,6 +53,7 @@ type Driver struct {
 	docker2oci       bool
 	alignedChunk     bool
 	chunkSize        string
+	batchSize        string
 	prefetchPatterns string
 	backend          backend.Backend
 	platformMC       platforms.MatchComparer
@@ -109,6 +110,7 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 	}
 
 	fsChunkSize := cfg["fs_chunk_size"]
+	BatchSize := cfg["batch_size"]
 	prefetchPatterns := cfg["prefetch_patterns"]
 
 	fsVersion := cfg["fs_version"]
@@ -151,6 +153,7 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		docker2oci:       docker2oci,
 		alignedChunk:     fsAlignChunk,
 		chunkSize:        fsChunkSize,
+		batchSize:        BatchSize,
 		prefetchPatterns: prefetchPatterns,
 		backend:          _backend,
 		platformMC:       platformMC,
@@ -203,6 +206,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		OCIRef:           d.ociRef,
 		AlignedChunk:     d.alignedChunk,
 		ChunkSize:        d.chunkSize,
+		BatchSize:        d.batchSize,
 	}
 	mergeOpt := nydusify.MergeOption{
 		WorkDir:          packOpt.WorkDir,
