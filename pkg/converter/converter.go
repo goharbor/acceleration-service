@@ -85,14 +85,15 @@ func (cvt *Converter) pull(ctx context.Context, source string) error {
 	return nil
 }
 
-func (cvt *Converter) Convert(ctx context.Context, source, target string) error {
+func (cvt *Converter) Convert(ctx context.Context, source, target string) (*Metric, error) {
+	var metric Metric
 	sourceNamed, err := docker.ParseDockerRef(source)
 	if err != nil {
-		return errors.Wrap(err, "parse source reference")
+		return nil, errors.Wrap(err, "parse source reference")
 	}
 	targetNamed, err := docker.ParseDockerRef(target)
 	if err != nil {
-		return errors.Wrap(err, "parse target reference")
+		return nil, errors.Wrap(err, "parse target reference")
 	}
 	source = sourceNamed.String()
 	target = targetNamed.String()
@@ -104,21 +105,29 @@ func (cvt *Converter) Convert(ctx context.Context, source, target string) error 
 			logger.Infof("try to pull with plain HTTP for %s", source)
 			cvt.provider.UsePlainHTTP()
 			if err := cvt.pull(ctx, source); err != nil {
-				return errors.Wrap(err, "try to pull image")
+				return nil, errors.Wrap(err, "try to pull image")
 			}
 		} else {
-			return errors.Wrap(err, "pull image")
+			return nil, errors.Wrap(err, "pull image")
 		}
 	}
-	logger.Infof("pulled image %s, elapse %s", source, time.Since(start))
+	metric.SourcePullElapsed = time.Since(start)
+	if err := metric.SetSourceImageSize(ctx, cvt, source); err != nil {
+		return nil, errors.Wrap(err, "get source image size")
+	}
+	logger.Infof("pulled image %s, elapse %s", source, metric.SourcePullElapsed)
 
 	logger.Infof("converting image %s", source)
 	start = time.Now()
 	desc, err := cvt.driver.Convert(ctx, cvt.provider, source)
 	if err != nil {
-		return errors.Wrap(err, "convert image")
+		return nil, errors.Wrap(err, "convert image")
 	}
-	logger.Infof("converted image %s, elapse %s", target, time.Since(start))
+	metric.ConversionElapsed = time.Since(start)
+	if err := metric.SetTargetImageSize(ctx, cvt.provider.ContentStore(), desc); err != nil {
+		return nil, errors.Wrap(err, "get target image size")
+	}
+	logger.Infof("converted image %s, elapse %s", target, metric.ConversionElapsed)
 
 	start = time.Now()
 	logger.Infof("pushing image %s", target)
@@ -127,13 +136,14 @@ func (cvt *Converter) Convert(ctx context.Context, source, target string) error 
 			logger.Infof("try to push with plain HTTP for %s", target)
 			cvt.provider.UsePlainHTTP()
 			if err := cvt.provider.Push(ctx, *desc, target); err != nil {
-				return errors.Wrap(err, "try to push image")
+				return nil, errors.Wrap(err, "try to push image")
 			}
 		} else {
-			return errors.Wrap(err, "push image")
+			return nil, errors.Wrap(err, "push image")
 		}
 	}
-	logger.Infof("pushed image %s, elapse %s", target, time.Since(start))
+	metric.TargetPushElapsed = time.Since(start)
+	logger.Infof("pushed image %s, elapse %s", target, metric.TargetPushElapsed)
 
-	return nil
+	return &metric, nil
 }

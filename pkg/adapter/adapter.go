@@ -116,8 +116,8 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		return errors.Wrap(err, "create lease")
 	}
 	defer done(ctx)
-
-	return adp.cvt.Convert(ctx, source, target)
+	_, err = adp.cvt.Convert(ctx, source, target)
+	return err
 }
 
 func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) error {
