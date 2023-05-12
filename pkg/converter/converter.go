@@ -124,7 +124,7 @@ func (cvt *Converter) Convert(ctx context.Context, source, target string) (*Metr
 		return nil, errors.Wrap(err, "convert image")
 	}
 	metric.ConversionElapsed = time.Since(start)
-	if err := metric.SetTargetImageSize(ctx, cvt.provider.ContentStore(), desc); err != nil {
+	if err := metric.SetTargetImageSize(ctx, cvt, desc); err != nil {
 		return nil, errors.Wrap(err, "get target image size")
 	}
 	logger.Infof("converted image %s, elapse %s", target, metric.ConversionElapsed)

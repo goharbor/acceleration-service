@@ -118,7 +118,7 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		// For compatibility of older configuration.
 		fsVersion = cfg["rafs_version"]
 		if fsVersion == "" {
-			fsVersion = "5"
+			fsVersion = "6"
 		}
 	}
 	compressor := cfg["compressor"]

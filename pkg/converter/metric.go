@@ -21,12 +21,8 @@ import (
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-)
-
-const (
-	MediaTypeDockerSchema2Manifest     = "application/vnd.docker.distribution.manifest.v2+json"
-	MediaTypeDockerSchema2ManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 )
 
 // Metric collected the metrics of conversion progress
@@ -43,9 +39,9 @@ type Metric struct {
 	TargetPushElapsed time.Duration
 }
 
-func (metric *Metric) SetTargetImageSize(ctx context.Context, cs content.Store, desc *ocispec.Descriptor) error {
+func (metric *Metric) SetTargetImageSize(ctx context.Context, cvt *Converter, desc *ocispec.Descriptor) error {
 	var err error
-	metric.TargetImageSize, err = metric.imageSize(ctx, cs, desc)
+	metric.TargetImageSize, err = metric.imageSize(ctx, cvt.provider.ContentStore(), desc, cvt.platformMC)
 	return err
 }
 
@@ -54,15 +50,17 @@ func (metric *Metric) SetSourceImageSize(ctx context.Context, cvt *Converter, so
 	if err != nil {
 		return err
 	}
-	metric.SourceImageSize, err = metric.imageSize(ctx, cvt.provider.ContentStore(), image)
-	return err
+	if metric.SourceImageSize, err = metric.imageSize(ctx, cvt.provider.ContentStore(), image, cvt.platformMC); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (metric *Metric) imageSize(ctx context.Context, cs content.Store, image *ocispec.Descriptor) (int64, error) {
+func (metric *Metric) imageSize(ctx context.Context, cs content.Store, image *ocispec.Descriptor, platformMC platforms.MatchComparer) (int64, error) {
 	var imageSize int64
 	switch image.MediaType {
-	case ocispec.MediaTypeImageIndex, MediaTypeDockerSchema2ManifestList:
-		manifests, err := images.ChildrenHandler(cs)(ctx, *image)
+	case ocispec.MediaTypeImageIndex, images.MediaTypeDockerSchema2ManifestList:
+		manifests, err := images.FilterPlatforms(images.ChildrenHandler(cs), platformMC)(ctx, *image)
 		if err != nil {
 			return imageSize, err
 		}
@@ -75,7 +73,7 @@ func (metric *Metric) imageSize(ctx context.Context, cs content.Store, image *oc
 				imageSize += desc.Size
 			}
 		}
-	case ocispec.MediaTypeImageManifest, MediaTypeDockerSchema2Manifest:
+	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
 		children, err := images.ChildrenHandler(cs)(ctx, *image)
 		if err != nil {
 			return imageSize, err
