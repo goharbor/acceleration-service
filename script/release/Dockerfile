@@ -26,7 +26,7 @@ RUN sha256sum -c nydus-static-$NYDUS_VERSION-linux-amd64.tgz.sha256sum
 RUN tar xzvf nydus-static-$NYDUS_VERSION-linux-amd64.tgz && mv nydus-static/nydus-image /usr/local/bin/.
 
 # Build acceld image
-FROM photon:4.0
+FROM photon:5.0
 COPY --from=build /accel/acceld /accel/accelctl /usr/local/bin/containerd /usr/local/bin/nydus-image /usr/local/bin/
 RUN mkdir /etc/containerd && /usr/local/bin/containerd config default > /etc/containerd/config.toml
 COPY ./script/release/entrypoint.sh /entrypoint.sh
