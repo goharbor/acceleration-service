@@ -26,10 +26,7 @@ provider:
         auth_header: header
     localhost:
       auth: YWRtaW46SGFyYm9yMTIzNDU=
-  containerd:
-    # ensure containerd service listening on this address
-    address: /run/containerd/containerd.sock
-    snapshotter: overlayfs
+  work_dir: /tmp
 
 converter:
   # number of worker for executing conversion task
