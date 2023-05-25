@@ -46,8 +46,8 @@ type MetricConfig struct {
 }
 
 type ProviderConfig struct {
-	Source     map[string]SourceConfig `yaml:"source"`
-	Containerd ContainerdConfig        `yaml:"containerd"`
+	Source  map[string]SourceConfig `yaml:"source"`
+	WorkDir string                  `yaml:"work_dir"`
 }
 
 type Webhook struct {
@@ -58,11 +58,6 @@ type SourceConfig struct {
 	Auth     string  `yaml:"auth"`
 	Insecure bool    `yaml:"insecure"`
 	Webhook  Webhook `yaml:"webhook"`
-}
-
-type ContainerdConfig struct {
-	Address     string `yaml:"address"`
-	Snapshotter string `yaml:"snapshotter"`
 }
 
 type ConversionRule struct {

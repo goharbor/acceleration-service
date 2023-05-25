@@ -59,17 +59,7 @@ $ cp misc/config/config.estargz.yaml misc/config/config.yaml
 Following comments in `misc/config/config.yaml`, ensure base64 encoded auth string and webhook auth header be configured correctly.
 
 ### Boot service
-
-1. Ensure containerd service is running
-
-Acceleration service depends on containerd service to manage image content, containerd service is used default if you have installed the latest docker.
-
-``` shell
-$ ps aux | grep containerd
-root        929  0.5  0.5 2222284 22368 ?       Ssl  Sep16   4:27 /usr/local/bin/containerd
-```
-
-2. Boot daemon to serve webhook request in PUSH_ARTIFACT event
+Boot daemon to serve webhook request in PUSH_ARTIFACT event
 
 ``` shell
 $ ./acceld --config ./misc/config/config.yaml
@@ -111,7 +101,7 @@ After that, we will find converted artifact in Harbor interface with name `<harb
 
 ### One-time mode
 
-One-time mode allows to do a conversion without starting the `acceld` service (still requires a local containerd service), using `accelctl` like this:
+One-time mode allows to do a conversion without starting the `acceld` service, using `accelctl` like this:
 
 ```
 $ accelctl convert --config ./misc/config/config.yaml 192.168.1.1/library/nginx:latest
