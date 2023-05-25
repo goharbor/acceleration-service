@@ -16,10 +16,8 @@ package adapter
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/containerd/containerd"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -46,28 +44,19 @@ type Adapter interface {
 
 type LocalAdapter struct {
 	cfg    *config.Config
-	client *containerd.Client
 	rule   *Rule
 	worker *Worker
 	cvt    *converter.Converter
 }
 
 func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
-	client, err := containerd.New(
-		cfg.Provider.Containerd.Address,
-		containerd.WithDefaultNamespace("harbor-acceleration-service"),
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "create containerd client")
-	}
-
 	allPlatforms := len(strings.TrimSpace(cfg.Converter.Platforms)) == 0
 	platformMC, err := platformutil.ParsePlatforms(allPlatforms, cfg.Converter.Platforms)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid platform configuration")
 	}
 
-	provider, err := content.NewLocalProvider(client, cfg.Host, platformMC)
+	provider, err := content.NewLocalProvider(cfg.Provider.WorkDir, cfg.Host, platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "create content provider")
 	}
@@ -92,7 +81,6 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 
 	handler := &LocalAdapter{
 		cfg:    cfg,
-		client: client,
 		rule:   rule,
 		worker: worker,
 		cvt:    cvt,
@@ -110,12 +98,6 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		}
 		return errors.Wrap(err, "create target reference by rule")
 	}
-
-	ctx, done, err := adp.client.WithLease(ctx)
-	if err != nil {
-		return errors.Wrap(err, "create lease")
-	}
-	defer done(ctx)
 	_, err = adp.cvt.Convert(ctx, source, target)
 	return err
 }
@@ -145,16 +127,6 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 }
 
 func (adp *LocalAdapter) CheckHealth(ctx context.Context) error {
-	health, err := adp.client.IsServing(ctx)
-
-	msg := "containerd service is unhealthy"
-	if err != nil {
-		return errors.Wrap(err, msg)
-	}
-
-	if !health {
-		return fmt.Errorf(msg)
-	}
-
+	// TODO：return the status of boltdb
 	return nil
 }
