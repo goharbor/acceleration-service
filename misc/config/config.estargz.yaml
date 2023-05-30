@@ -26,7 +26,11 @@ provider:
         auth_header: header
     localhost:
       auth: YWRtaW46SGFyYm9yMTIzNDU=
+  # work directory of acceld
   work_dir: /tmp
+  gcpolicy:
+      # size threshold that triggers GC, the oldest used blobs will be reclaimed if exceeds the size.
+      threshold: 1000MB
 
 converter:
   # number of worker for executing conversion task
