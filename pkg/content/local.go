@@ -16,24 +16,28 @@ package content
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	bolt "go.etcd.io/bbolt"
 )
 
 type LocalProvider struct {
 	mutex        sync.Mutex
 	images       map[string]*ocispec.Descriptor
 	usePlainHTTP bool
-	store        content.Store
+	store        *content.Store
 	hosts        remote.HostFunc
 	platformMC   platforms.MatchComparer
 }
@@ -42,17 +46,27 @@ func NewLocalProvider(
 	workDir string,
 	hosts remote.HostFunc,
 	platformMC platforms.MatchComparer,
-) (Provider, error) {
-	store, err := local.NewLabeledStore(workDir, newMemoryLabelStore())
-	if err != nil {
-		return nil, errors.Wrap(err, "create local provider")
+) (Provider, *metadata.DB, error) {
+	contentDir := filepath.Join(workDir, "content")
+	if err := os.MkdirAll(contentDir, 0755); err != nil {
+		return nil, nil, errors.Wrap(err, "create local provider work directory")
 	}
+	store, err := local.NewLabeledStore(contentDir, newMemoryLabelStore())
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "create local provider content store")
+	}
+	bdb, err := bolt.Open(filepath.Join(workDir, "meta.db"), 0655, nil)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "create local provider database")
+	}
+	db := metadata.NewDB(bdb, store, nil)
+	store = db.ContentStore()
 	return &LocalProvider{
-		store:      store,
+		store:      &store,
 		images:     make(map[string]*ocispec.Descriptor),
 		hosts:      hosts,
 		platformMC: platformMC,
-	}, nil
+	}, db, nil
 }
 
 func (pvd *LocalProvider) UsePlainHTTP() {
@@ -79,7 +93,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	img, err := fetch(ctx, pvd.store, rc, ref, 0)
+	img, err := fetch(ctx, *pvd.store, rc, ref, 0)
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}
@@ -99,7 +113,7 @@ func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	return push(ctx, pvd.store, rc, desc, ref)
+	return push(ctx, *pvd.store, rc, desc, ref)
 }
 
 func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descriptor, error) {
@@ -107,7 +121,7 @@ func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descr
 }
 
 func (pvd *LocalProvider) ContentStore() content.Store {
-	return pvd.store
+	return *pvd.store
 }
 
 func (pvd *LocalProvider) setImage(ref string, image *ocispec.Descriptor) {

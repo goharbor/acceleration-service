@@ -18,6 +18,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/containerd/containerd/namespaces"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -43,10 +44,11 @@ type Adapter interface {
 }
 
 type LocalAdapter struct {
-	cfg    *config.Config
-	rule   *Rule
-	worker *Worker
-	cvt    *converter.Converter
+	cfg     *config.Config
+	rule    *Rule
+	worker  *Worker
+	cvt     *converter.Converter
+	content *Content
 }
 
 func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
@@ -56,11 +58,14 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, errors.Wrap(err, "invalid platform configuration")
 	}
 
-	provider, err := content.NewLocalProvider(cfg.Provider.WorkDir, cfg.Host, platformMC)
+	provider, db, err := content.NewLocalProvider(cfg.Provider.WorkDir, cfg.Host, platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "create content provider")
 	}
-
+	content, err := NewContent(db, cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "create Content in LocalProvider")
+	}
 	cvt, err := converter.New(
 		converter.WithProvider(provider),
 		converter.WithDriver(cfg.Converter.Driver.Type, cfg.Converter.Driver.Config),
@@ -80,10 +85,11 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 	}
 
 	handler := &LocalAdapter{
-		cfg:    cfg,
-		rule:   rule,
-		worker: worker,
-		cvt:    cvt,
+		cfg:     cfg,
+		rule:    rule,
+		worker:  worker,
+		cvt:     cvt,
+		content: content,
 	}
 
 	return handler, nil
@@ -98,8 +104,13 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		}
 		return errors.Wrap(err, "create target reference by rule")
 	}
-	_, err = adp.cvt.Convert(ctx, source, target)
-	return err
+	if _, err = adp.cvt.Convert(ctx, source, target); err != nil {
+		return err
+	}
+	if err := adp.content.GC(ctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) error {
@@ -109,7 +120,7 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 		// FIXME: The synchronous conversion task should also be
 		// executed in a limited worker queue.
 		return metrics.Conversion.OpWrap(func() error {
-			err := adp.Convert(ctx, ref)
+			err := adp.Convert(namespaces.WithNamespace(ctx, "acceleration-service"), ref)
 			task.Manager.Finish(taskID, err)
 			return err
 		}, "convert")
@@ -117,7 +128,7 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 
 	adp.worker.Dispatch(func() error {
 		return metrics.Conversion.OpWrap(func() error {
-			err := adp.Convert(context.Background(), ref)
+			err := adp.Convert(namespaces.WithNamespace(context.Background(), "acceleration-service"), ref)
 			task.Manager.Finish(taskID, err)
 			return err
 		}, "convert")
@@ -127,6 +138,6 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 }
 
 func (adp *LocalAdapter) CheckHealth(ctx context.Context) error {
-	// TODO：return the status of boltdb
-	return nil
+	_, err := adp.content.Size()
+	return err
 }
