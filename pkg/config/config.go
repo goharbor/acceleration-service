@@ -46,8 +46,13 @@ type MetricConfig struct {
 }
 
 type ProviderConfig struct {
-	Source  map[string]SourceConfig `yaml:"source"`
-	WorkDir string                  `yaml:"work_dir"`
+	Source   map[string]SourceConfig `yaml:"source"`
+	WorkDir  string                  `yaml:"work_dir"`
+	GCPolicy GCPolicy                `yaml:"gcpolicy"`
+}
+
+type GCPolicy struct {
+	Threshold string `yaml:"threshold"`
 }
 
 type Webhook struct {
