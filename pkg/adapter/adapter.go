@@ -21,6 +21,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/content"
@@ -30,6 +31,8 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/platformutil"
 	"github.com/goharbor/acceleration-service/pkg/task"
 )
+
+var dispatchSingleflight = &singleflight.Group{}
 
 type Adapter interface {
 	// Dispatch dispatches a conversion task to worker queue
@@ -127,11 +130,14 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 	}
 
 	adp.worker.Dispatch(func() error {
-		return metrics.Conversion.OpWrap(func() error {
-			err := adp.Convert(namespaces.WithNamespace(context.Background(), "acceleration-service"), ref)
-			task.Manager.Finish(taskID, err)
-			return err
-		}, "convert")
+		// If the ref is same, we only convert once in the same time.
+		_, err, _ := dispatchSingleflight.Do(ref, func() (interface{}, error) {
+			return nil, metrics.Conversion.OpWrap(func() error {
+				return adp.Convert(namespaces.WithNamespace(context.Background(), "acceleration-service"), ref)
+			}, "convert")
+		})
+		task.Manager.Finish(taskID, err)
+		return err
 	})
 
 	return nil
