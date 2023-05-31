@@ -23,7 +23,9 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
@@ -33,7 +35,10 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/semaphore"
+	"golang.org/x/sync/singleflight"
 )
+
+var fetchSingleflight = &singleflight.Group{}
 
 // Ported from containerd project, copyright The containerd Authors.
 // github.com/containerd/containerd/blob/main/pull.go
@@ -102,7 +107,7 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 		}
 
 		handlers := append(rCtx.BaseHandlers,
-			remotes.FetchHandler(store, fetcher),
+			fetchHandler(store, fetcher),
 			convertibleHandler,
 			childrenHandler,
 			appendDistSrcLabelHandler,
@@ -138,6 +143,31 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 		Target: desc,
 		Labels: rCtx.Labels,
 	}, nil
+}
+
+// Ported from containerd project, copyright The containerd Authors.
+// https://github.com/containerd/containerd/blob/main/remotes/handlers.go
+func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher) images.HandlerFunc {
+	return func(ctx context.Context, desc ocispec.Descriptor) (subdescs []ocispec.Descriptor, err error) {
+		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
+			"digest":    desc.Digest,
+			"mediatype": desc.MediaType,
+			"size":      desc.Size,
+		}))
+
+		switch desc.MediaType {
+		case images.MediaTypeDockerSchema1Manifest:
+			return nil, fmt.Errorf("%v not supported", desc.MediaType)
+		default:
+			_, err, _ := fetchSingleflight.Do(string(desc.Digest), func() (interface{}, error) {
+				return nil, remotes.Fetch(ctx, ingester, fetcher, desc)
+			})
+			if errdefs.IsAlreadyExists(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+	}
 }
 
 // Ported from containerd project, copyright The containerd Authors.

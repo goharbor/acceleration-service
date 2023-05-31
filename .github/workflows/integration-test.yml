@@ -6,13 +6,31 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  GO_VERSION: 1.18
+  HARBOR_VERSION: 2.4.1
+  NYDUS_VERSION: 2.1.6
+  OCI_IMAGE_NAME: wordpress
+
 jobs:
-  integration_test:
+  accel_check:
     runs-on: ubuntu-latest
-    env:
-      GO_VERSION: 1.18
-      HARBOR_VERSION: 2.4.1
-      OCI_IMAGE_NAME: wordpress
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Install Golang
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Check
+      run: |
+        make install-check-tools
+        make check
+
+  accel_build:
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
@@ -24,9 +42,27 @@ jobs:
 
     - name: Build Accel
       run: |
-        make install-check-tools
-        make check
         make
+
+    - name: Upload Accel
+      uses: actions/upload-artifact@v3
+      with:
+        name: accel-artifact
+        path: |
+          ./accelctl
+          ./acceld
+
+  integration_test:
+    runs-on: ubuntu-latest
+    needs: [accel_build]
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Download Acceld
+      uses: actions/download-artifact@v3
+      with:
+        name: accel-artifact
 
     - name: Install Harbor
       run: |
@@ -45,13 +81,10 @@ jobs:
 
     - name: Test Nydus Driver
       run: |
-        NYDUS_VERSION=v2.1.5
-
+        chmod +x accel*
         # Download nydus components
-        wget https://github.com/dragonflyoss/image-service/releases/download/$NYDUS_VERSION/nydus-static-$NYDUS_VERSION-linux-amd64.tgz
-        tar xzvf nydus-static-$NYDUS_VERSION-linux-amd64.tgz
-        mkdir -p /usr/bin
-        sudo mv nydus-static/nydus-image nydus-static/nydusd nydus-static/nydusify /usr/bin/
+        wget https://github.com/dragonflyoss/image-service/releases/download/v${{ env.NYDUS_VERSION }}/nydus-static-v${{ env.NYDUS_VERSION }}-linux-amd64.tgz
+        sudo tar xzvf nydus-static-v${{ env.NYDUS_VERSION }}-linux-amd64.tgz --wildcards --strip-components=1 -C /usr/bin/ nydus-static/*
         ./script/integration/nydus/test.sh ${{ env.OCI_IMAGE_NAME }}
 
     - name: Test eStargz Driver
