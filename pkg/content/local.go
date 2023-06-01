@@ -37,16 +37,17 @@ type LocalProvider struct {
 	mutex        sync.Mutex
 	images       map[string]*ocispec.Descriptor
 	usePlainHTTP bool
-	store        *content.Store
+	content      *Content
 	hosts        remote.HostFunc
 	platformMC   platforms.MatchComparer
 }
 
 func NewLocalProvider(
 	workDir string,
+	threshold string,
 	hosts remote.HostFunc,
 	platformMC platforms.MatchComparer,
-) (Provider, *metadata.DB, error) {
+) (Provider, *Content, error) {
 	contentDir := filepath.Join(workDir, "content")
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider work directory")
@@ -60,13 +61,19 @@ func NewLocalProvider(
 		return nil, nil, errors.Wrap(err, "create local provider database")
 	}
 	db := metadata.NewDB(bdb, store, nil)
-	store = db.ContentStore()
+	if err := db.Init(context.Background()); err != nil {
+		return nil, nil, err
+	}
+	content, err := NewContent(db, threshold)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "create local provider content")
+	}
 	return &LocalProvider{
-		store:      &store,
+		content:    content,
 		images:     make(map[string]*ocispec.Descriptor),
 		hosts:      hosts,
 		platformMC: platformMC,
-	}, db, nil
+	}, content, nil
 }
 
 func (pvd *LocalProvider) UsePlainHTTP() {
@@ -93,7 +100,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	img, err := fetch(ctx, *pvd.store, rc, ref, 0)
+	img, err := fetch(ctx, pvd.ContentStore(), rc, ref, 0)
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}
@@ -113,7 +120,7 @@ func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	return push(ctx, *pvd.store, rc, desc, ref)
+	return push(ctx, pvd.ContentStore(), rc, desc, ref)
 }
 
 func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descriptor, error) {
@@ -121,7 +128,7 @@ func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descr
 }
 
 func (pvd *LocalProvider) ContentStore() content.Store {
-	return *pvd.store
+	return pvd.content.ContentStore()
 }
 
 func (pvd *LocalProvider) setImage(ref string, image *ocispec.Descriptor) {

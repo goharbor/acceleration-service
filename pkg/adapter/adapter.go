@@ -51,7 +51,7 @@ type LocalAdapter struct {
 	rule    *Rule
 	worker  *Worker
 	cvt     *converter.Converter
-	content *Content
+	content *content.Content
 }
 
 func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
@@ -61,13 +61,9 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, errors.Wrap(err, "invalid platform configuration")
 	}
 
-	provider, db, err := content.NewLocalProvider(cfg.Provider.WorkDir, cfg.Host, platformMC)
+	provider, content, err := content.NewLocalProvider(cfg.Provider.WorkDir, cfg.Provider.GCPolicy.Threshold, cfg.Host, platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "create content provider")
-	}
-	content, err := NewContent(db, cfg)
-	if err != nil {
-		return nil, errors.Wrap(err, "create Content in LocalProvider")
 	}
 	cvt, err := converter.New(
 		converter.WithProvider(provider),
