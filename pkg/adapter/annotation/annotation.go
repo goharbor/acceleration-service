@@ -23,13 +23,15 @@ import (
 	"github.com/pkg/errors"
 
 	providerContent "github.com/goharbor/acceleration-service/pkg/content"
+	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/utils"
 )
 
 type Appended struct {
-	DriverName    string
-	DriverVersion string
-	SourceDigest  string
+	DriverName       string
+	DriverVersion    string
+	SourceDigest     string
+	ExtraAnnotations map[string]string
 }
 
 const (
@@ -55,7 +57,13 @@ func annotate(annotations map[string]string, appended Appended) map[string]strin
 	if appended.DriverVersion != "" {
 		annotations[AnnotationAccelerationDriverVersion] = appended.DriverVersion
 	}
-	annotations[AnnotationAccelerationSourceDigest] = appended.SourceDigest
+	if appended.SourceDigest != "" {
+		annotations[AnnotationAccelerationSourceDigest] = appended.SourceDigest
+	}
+
+	for k, v := range appended.ExtraAnnotations {
+		annotations[k] = v
+	}
 
 	return annotations
 }
@@ -65,7 +73,8 @@ func Append(ctx context.Context, provider providerContent.Provider, desc *ocispe
 	var err error
 
 	switch desc.MediaType {
-	case ocispec.MediaTypeImageManifest:
+	// Refer: https://github.com/goharbor/harbor/blob/main/src/controller/artifact/abstractor.go#L75
+	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
 		var manifest ocispec.Manifest
 		labels, err = utils.ReadJSON(ctx, provider.ContentStore(), &manifest, *desc)
 		if err != nil {
@@ -80,23 +89,36 @@ func Append(ctx context.Context, provider providerContent.Provider, desc *ocispe
 
 		return desc, nil
 
-	case ocispec.MediaTypeImageIndex:
+	// Refer: https://github.com/goharbor/harbor/blob/main/src/controller/artifact/abstractor.go#L79
+	case ocispec.MediaTypeImageIndex, images.MediaTypeDockerSchema2ManifestList:
 		var index ocispec.Index
 		labels, err = utils.ReadJSON(ctx, provider.ContentStore(), &index, *desc)
 		if err != nil {
 			return nil, errors.Wrap(err, "read manifest index")
 		}
 
-		index.Annotations = annotate(index.Annotations, appended)
+		for idx, maniDesc := range index.Manifests {
+			if maniDesc.Platform != nil && maniDesc.Platform.OSFeatures[0] == nydusutils.ManifestOSFeatureNydus {
+				var manifest ocispec.Manifest
+				labels, err = utils.ReadJSON(ctx, provider.ContentStore(), &manifest, maniDesc)
+				if err != nil {
+					return nil, errors.Wrap(err, "read manifest")
+				}
+
+				manifest.Annotations = annotate(maniDesc.Annotations, appended)
+				newManiDesc, err := utils.WriteJSON(ctx, provider.ContentStore(), manifest, maniDesc, "", labels)
+				if err != nil {
+					return nil, errors.Wrap(err, "write manifest")
+				}
+				index.Manifests[idx] = *newManiDesc
+			}
+		}
 		desc, err := utils.WriteJSON(ctx, provider.ContentStore(), index, *desc, "", labels)
 		if err != nil {
 			return nil, errors.Wrap(err, "write manifest index")
 		}
 
 		return desc, nil
-
-	case images.MediaTypeDockerSchema2Manifest, images.MediaTypeDockerSchema2ManifestList:
-		return nil, fmt.Errorf("docker manifest not support to append annotation")
 	}
 
 	return nil, fmt.Errorf("invalid mediatype %s", desc.MediaType)

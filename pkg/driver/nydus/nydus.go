@@ -21,21 +21,27 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
+	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
+	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
+	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
+	"github.com/goharbor/acceleration-service/pkg/errdefs"
+	"github.com/goharbor/acceleration-service/pkg/utils"
+
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images/converter"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/nydus-snapshotter/pkg/backend"
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
-	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
-	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+)
 
-	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
-	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
-	"github.com/goharbor/acceleration-service/pkg/utils"
+const (
+	// annotationNydusFlag is used to indicate a image which is nydus format.
+	annotationNydusFlag = "containerd.io/snapshot/nydus"
 )
 
 type chunkDictInfo struct {
@@ -176,6 +182,10 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, so
 	desc, err := d.convert(ctx, provider, *image)
 	if err != nil {
 		return nil, err
+	}
+	desc.Annotations = map[string]string{
+		annotationNydusFlag:                           "true",
+		annotation.AnnotationAccelerationSourceDigest: image.Digest.String(),
 	}
 	if d.mergeManifest {
 		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc)
