@@ -100,7 +100,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	img, err := fetch(ctx, pvd.ContentStore(), rc, ref, 0)
+	img, err := fetch(ctx, pvd.ContentStore(), rc, ref, 0, pvd.content)
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}

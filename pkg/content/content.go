@@ -18,10 +18,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/metadata"
 	"github.com/dustin/go-humanize"
+	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
@@ -31,7 +33,8 @@ var (
 	bucketKeyObjectContent = []byte("content")
 	bucketKeyObjectBlob    = []byte("blob")
 
-	bucketKeySize = []byte("size")
+	bucketKeySize      = []byte("size")
+	bucketKeyUpdatedAt = []byte("updatedat")
 )
 
 type Content struct {
@@ -105,6 +108,18 @@ func (content *Content) GC(ctx context.Context) error {
 	return nil
 }
 
+// update the latest used time
+func (content *Content) UpdateTime(digest *digest.Digest) error {
+	return content.db.Update(func(tx *bolt.Tx) error {
+		bucket := getBlobBucket(tx, *digest)
+		updatedAt, err := time.Now().UTC().MarshalBinary()
+		if err != nil {
+			return err
+		}
+		return bucket.Put(bucketKeyUpdatedAt, updatedAt)
+	})
+}
+
 func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
 	bucket := tx.Bucket(keys[0])
 
@@ -120,4 +135,8 @@ func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
 
 func getBlobsBucket(tx *bolt.Tx) *bolt.Bucket {
 	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectContent, bucketKeyObjectBlob)
+}
+
+func getBlobBucket(tx *bolt.Tx, dgst digest.Digest) *bolt.Bucket {
+	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectContent, bucketKeyObjectBlob, []byte(dgst.String()))
 }
