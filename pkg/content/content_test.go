@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package adapter
+package content
 
 import (
 	"context"
@@ -21,7 +21,6 @@ import (
 
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/metadata"
-	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 )
@@ -35,14 +34,7 @@ func TestContenSize(t *testing.T) {
 	require.NoError(t, err)
 	db := metadata.NewDB(bdb, store, nil)
 	require.NoError(t, db.Init(context.Background()))
-	cfg := config.Config{
-		Provider: config.ProviderConfig{
-			GCPolicy: config.GCPolicy{
-				Threshold: "1000MB",
-			},
-		},
-	}
-	content, err := NewContent(db, &cfg)
+	content, err := NewContent(db, "1000MB")
 	require.NoError(t, err)
 	size, err := content.Size()
 	require.NoError(t, err)
