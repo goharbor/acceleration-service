@@ -24,6 +24,7 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/reference/docker"
+	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
@@ -122,6 +123,14 @@ func (cvt *Converter) Convert(ctx context.Context, source, target string) (*Metr
 	desc, err := cvt.driver.Convert(ctx, cvt.provider, source)
 	if err != nil {
 		return nil, errors.Wrap(err, "convert image")
+	}
+	desc, err = annotation.Append(ctx, cvt.provider, desc, annotation.Appended{
+		DriverName:       cvt.driver.Name(),
+		DriverVersion:    cvt.driver.Version(),
+		ExtraAnnotations: desc.Annotations,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "append annotation")
 	}
 	metric.ConversionElapsed = time.Since(start)
 	if err := metric.SetTargetImageSize(ctx, cvt, desc); err != nil {
