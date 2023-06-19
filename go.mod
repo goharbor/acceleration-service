@@ -7,7 +7,7 @@ require (
 	github.com/containerd/nydus-snapshotter v0.9.0
 	github.com/containerd/stargz-snapshotter v0.14.3
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3
-	github.com/docker/cli v23.0.3+incompatible
+	github.com/docker/cli v24.0.2+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.14.1
