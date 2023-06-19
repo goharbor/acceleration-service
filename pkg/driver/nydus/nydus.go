@@ -19,7 +19,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"regexp"
 	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
 	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
@@ -29,6 +33,7 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/utils"
 
 	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/images/converter"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/nydus-snapshotter/pkg/backend"
@@ -40,9 +45,18 @@ import (
 )
 
 const (
-	// annotationNydusFlag is used to indicate a image which is nydus format.
-	annotationNydusFlag = "containerd.io/snapshot/nydus"
+	// annotationSourceDigest indicates the source OCI image digest.
+	annotationSourceDigest = "containerd.io/snapshot/nydus-source-digest"
+	// annotationSourceReference indicates the source OCI image reference name.
+	annotationSourceReference = "containerd.io/snapshot/nydus-source-reference"
+	// annotationFsVersion indicates the fs version (rafs v5/v6) of nydus image.
+	annotationFsVersion = "containerd.io/snapshot/nydus-fs-version"
+	// annotationBuilderVersion indicates the nydus builder (nydus-image) version.
+	annotationBuilderVersion = "containerd.io/snapshot/nydus-builder-version"
 )
+
+var builderVersion string
+var builderVersionOnce sync.Once
 
 type chunkDictInfo struct {
 	BootstrapPath string
@@ -63,6 +77,23 @@ type Driver struct {
 	prefetchPatterns string
 	backend          backend.Backend
 	platformMC       platforms.MatchComparer
+}
+
+func detectBuilderVersion(ctx context.Context, builder string) string {
+	builderVersionOnce.Do(func() {
+		cmd := exec.CommandContext(ctx, builder, "--version")
+		output, err := cmd.Output()
+		if err != nil {
+			return
+		}
+
+		re := regexp.MustCompile(`Version:\s*(v.*)`)
+		matches := re.FindSubmatch(output)
+		if len(matches) > 1 {
+			builderVersion = strings.TrimSpace(string(matches[1]))
+		}
+	})
+	return builderVersion
 }
 
 func parseBool(v string) (bool, error) {
@@ -174,18 +205,14 @@ func (d *Driver) Version() string {
 	return ""
 }
 
-func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, source string) (*ocispec.Descriptor, error) {
-	image, err := provider.Image(ctx, source)
+func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, sourceRef string) (*ocispec.Descriptor, error) {
+	image, err := provider.Image(ctx, sourceRef)
 	if err != nil {
 		return nil, errors.Wrap(err, "get source image")
 	}
-	desc, err := d.convert(ctx, provider, *image)
+	desc, err := d.convert(ctx, provider, *image, sourceRef)
 	if err != nil {
 		return nil, err
-	}
-	desc.Annotations = map[string]string{
-		annotationNydusFlag:                           "true",
-		annotation.AnnotationAccelerationSourceDigest: image.Digest.String(),
 	}
 	if d.mergeManifest {
 		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc)
@@ -193,7 +220,7 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, so
 	return desc, err
 }
 
-func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, source ocispec.Descriptor) (*ocispec.Descriptor, error) {
+func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, source ocispec.Descriptor, sourceRef string) (*ocispec.Descriptor, error) {
 	cs := provider.ContentStore()
 
 	chunkDictPath := ""
@@ -228,8 +255,35 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		OCI:              d.docker2oci,
 		OCIRef:           packOpt.OCIRef,
 	}
+	convertHookFunc := func(
+		ctx context.Context, cs content.Store, orgDesc ocispec.Descriptor, newDesc *ocispec.Descriptor,
+	) (*ocispec.Descriptor, error) {
+		// Append the nydus bootstrap layer for image manifest.
+		desc, err := nydusify.ConvertHookFunc(mergeOpt)(ctx, cs, orgDesc, newDesc)
+		if err != nil {
+			return nil, err
+		}
+		if !images.IsManifestType(desc.MediaType) {
+			return desc, err
+		}
+
+		// Append the nydus related annotations for image manifest.
+		appended := map[string]string{
+			annotationSourceDigest:    string(orgDesc.Digest),
+			annotationSourceReference: sourceRef,
+			annotationFsVersion:       d.fsVersion,
+		}
+		if version := detectBuilderVersion(ctx, d.builderPath); version != "" {
+			appended[annotationBuilderVersion] = version
+		}
+		desc, err = annotation.Append(ctx, cs, desc, appended)
+		if err != nil {
+			return nil, errors.Wrap(err, "append annotations")
+		}
+		return desc, err
+	}
 	convertHooks := converter.ConvertHooks{
-		PostConvertHook: nydusify.ConvertHookFunc(mergeOpt),
+		PostConvertHook: convertHookFunc,
 	}
 	indexConvertFunc := converter.IndexConvertFuncWithHook(
 		nydusify.LayerConvertFunc(packOpt),
@@ -237,6 +291,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		d.platformMC,
 		convertHooks,
 	)
+
 	return indexConvertFunc(ctx, cs, source)
 }
 

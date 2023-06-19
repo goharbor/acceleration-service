@@ -34,9 +34,10 @@ import (
 var logger = logrus.WithField("module", "converter")
 
 type Converter struct {
-	driver     driver.Driver
-	provider   content.Provider
-	platformMC platforms.MatchComparer
+	driver           driver.Driver
+	provider         content.Provider
+	platformMC       platforms.MatchComparer
+	extraAnnotations map[string]string
 }
 
 func New(opts ...ConvertOpt) (*Converter, error) {
@@ -58,9 +59,10 @@ func New(opts ...ConvertOpt) (*Converter, error) {
 	}
 
 	handler := &Converter{
-		driver:     driver,
-		provider:   options.provider,
-		platformMC: platformMC,
+		driver:           driver,
+		provider:         options.provider,
+		platformMC:       platformMC,
+		extraAnnotations: options.annotations,
 	}
 
 	return handler, nil
@@ -124,13 +126,9 @@ func (cvt *Converter) Convert(ctx context.Context, source, target string) (*Metr
 	if err != nil {
 		return nil, errors.Wrap(err, "convert image")
 	}
-	desc, err = annotation.Append(ctx, cvt.provider, desc, annotation.Appended{
-		DriverName:       cvt.driver.Name(),
-		DriverVersion:    cvt.driver.Version(),
-		ExtraAnnotations: desc.Annotations,
-	})
+	desc, err = annotation.Append(ctx, cvt.provider.ContentStore(), desc, cvt.extraAnnotations)
 	if err != nil {
-		return nil, errors.Wrap(err, "append annotation")
+		return nil, errors.Wrap(err, "append extra annotations")
 	}
 	metric.ConversionElapsed = time.Since(start)
 	if err := metric.SetTargetImageSize(ctx, cvt, desc); err != nil {
