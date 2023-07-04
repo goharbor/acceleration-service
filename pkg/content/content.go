@@ -21,7 +21,10 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/metadata"
+	"github.com/containerd/containerd/metadata/boltutil"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/dustin/go-humanize"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
@@ -32,6 +35,7 @@ var (
 	bucketKeyVersion       = []byte("v1")
 	bucketKeyObjectContent = []byte("content")
 	bucketKeyObjectBlob    = []byte("blob")
+	bucketKeyObjectLeases  = []byte("leases")
 
 	bucketKeySize      = []byte("size")
 	bucketKeyUpdatedAt = []byte("updatedat")
@@ -39,6 +43,7 @@ var (
 
 type Content struct {
 	db        *metadata.DB
+	lm        leases.Manager
 	threshold int64
 }
 
@@ -49,6 +54,7 @@ func NewContent(db *metadata.DB, threshold string) (*Content, error) {
 	}
 	return &Content{
 		db:        db,
+		lm:        metadata.NewLeaseManager(db),
 		threshold: int64(t),
 	}, nil
 }
@@ -98,7 +104,9 @@ func (content *Content) GC(ctx context.Context) error {
 		return err
 	}
 	if size > content.threshold {
-		// TODO: *metadata.DB.GarbageCollect will clear all caches, we need to rewrite gc
+		if err := content.manageLeases(ctx); err != nil {
+			return err
+		}
 		gcStatus, err := content.db.GarbageCollect(ctx)
 		if err != nil {
 			return err
@@ -108,15 +116,48 @@ func (content *Content) GC(ctx context.Context) error {
 	return nil
 }
 
-// update the latest used time
+// use lease to keep the content blob, which will not be gc
+func (content *Content) manageLeases(ctx context.Context) error {
+	leases, err := content.lm.List(ctx)
+	if err != nil {
+		return nil
+	}
+	for _, lease := range leases {
+		fmt.Println(lease.ID)
+		fmt.Printf("%+v\n", lease.Labels)
+	}
+	return nil
+}
+
+// update the latest used time in lease
 func (content *Content) UpdateTime(digest *digest.Digest) error {
-	return content.db.Update(func(tx *bolt.Tx) error {
-		bucket := getBlobBucket(tx, *digest)
-		updatedAt, err := time.Now().UTC().MarshalBinary()
+	var l leases.Lease
+	ctx := namespaces.WithNamespace(context.Background(), "acceleration-service")
+	contentLeases, err := content.lm.List(ctx, "id=="+digest.String())
+	if err != nil {
+		return nil
+	}
+	if len(contentLeases) == 0 {
+		l, err = content.lm.Create(ctx, leases.WithID(digest.String()))
 		if err != nil {
 			return err
 		}
-		return bucket.Put(bucketKeyUpdatedAt, updatedAt)
+		if err := content.lm.AddResource(ctx, l, leases.Resource{
+			ID:   digest.String(),
+			Type: "content",
+		}); err != nil {
+			return err
+		}
+	}
+	return content.db.Update(func(tx *bolt.Tx) error {
+		bucket := getLeasesBucket(tx, digest.String())
+		// if can't find lease bucket, it maens content store is empty
+		if bucket == nil {
+			return nil
+		}
+		updatedLabel := map[string]string{}
+		updatedLabel[string(bucketKeyUpdatedAt)] = time.Now().UTC().String()
+		return boltutil.WriteLabels(bucket, updatedLabel)
 	})
 }
 
@@ -137,6 +178,6 @@ func getBlobsBucket(tx *bolt.Tx) *bolt.Bucket {
 	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectContent, bucketKeyObjectBlob)
 }
 
-func getBlobBucket(tx *bolt.Tx, dgst digest.Digest) *bolt.Bucket {
-	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectContent, bucketKeyObjectBlob, []byte(dgst.String()))
+func getLeasesBucket(tx *bolt.Tx, lease string) *bolt.Bucket {
+	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectLeases, []byte(lease))
 }
