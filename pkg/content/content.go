@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/containerd/containerd/content"
@@ -37,8 +38,8 @@ var (
 	bucketKeyObjectBlob    = []byte("blob")
 	bucketKeyObjectLeases  = []byte("leases")
 
-	bucketKeySize      = []byte("size")
-	bucketKeyUpdatedAt = []byte("updatedat")
+	bucketKeySize  = []byte("size")
+	updatedAtLabel = "updatedat"
 )
 
 type Content struct {
@@ -99,12 +100,16 @@ func blobSize(bucket *bolt.Bucket) (int64, error) {
 
 // GC clean the local caches by cfg.Provider.GCPolicy configuration
 func (content *Content) GC(ctx context.Context) error {
+	//clear the intermediate file created in convert
+	if _, err := content.db.GarbageCollect(ctx); err != nil {
+		return err
+	}
 	size, err := content.Size()
 	if err != nil {
 		return err
 	}
 	if size > content.threshold {
-		if err := content.manageLeases(ctx); err != nil {
+		if err := content.manageLeases(ctx, size-content.threshold); err != nil {
 			return err
 		}
 		gcStatus, err := content.db.GarbageCollect(ctx)
@@ -116,15 +121,28 @@ func (content *Content) GC(ctx context.Context) error {
 	return nil
 }
 
-// use lease to keep the content blob, which will not be gc
-func (content *Content) manageLeases(ctx context.Context) error {
+// use lease to manage content blob, delete lease of content which should be gc
+func (content *Content) manageLeases(ctx context.Context, size int64) error {
 	leases, err := content.lm.List(ctx)
 	if err != nil {
 		return nil
 	}
+	sort.Slice(leases, func(i, j int) bool {
+		return leases[i].Labels[updatedAtLabel] < leases[j].Labels[updatedAtLabel]
+	})
 	for _, lease := range leases {
-		fmt.Println(lease.ID)
-		fmt.Printf("%+v\n", lease.Labels)
+		content.db.View(func(tx *bolt.Tx) error {
+			blobsize, err := blobSize(getBlobsBucket(tx).Bucket([]byte(lease.ID)))
+			if err != nil {
+				return err
+			}
+			size -= blobsize
+			content.lm.Delete(ctx, lease)
+			return nil
+		})
+		if size <= 0 {
+			break
+		}
 	}
 	return nil
 }
@@ -156,7 +174,7 @@ func (content *Content) UpdateTime(digest *digest.Digest) error {
 			return nil
 		}
 		updatedLabel := map[string]string{}
-		updatedLabel[string(bucketKeyUpdatedAt)] = time.Now().UTC().String()
+		updatedLabel[updatedAtLabel] = time.Now().UTC().String()
 		return boltutil.WriteLabels(bucket, updatedLabel)
 	})
 }
