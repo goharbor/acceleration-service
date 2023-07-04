@@ -16,7 +16,9 @@ package content
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -25,6 +27,7 @@ import (
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
@@ -162,8 +165,11 @@ func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher, content *C
 			_, err, _ := fetchSingleflight.Do(string(desc.Digest), func() (interface{}, error) {
 				return nil, remotes.Fetch(ctx, ingester, fetcher, desc)
 			})
+			if err := content.UpdateTime(&desc.Digest); err != nil {
+				return nil, err
+			}
 			if errdefs.IsAlreadyExists(err) {
-				return nil, content.UpdateTime(&desc.Digest)
+				return nil, nil
 			}
 			return nil, err
 		}
@@ -172,7 +178,7 @@ func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher, content *C
 
 // Ported from containerd project, copyright The containerd Authors.
 // github.com/containerd/containerd/blob/main/client.go
-func push(ctx context.Context, store content.Store, pushCtx *containerd.RemoteContext, desc ocispec.Descriptor, ref string) error {
+func push(ctx context.Context, store content.Store, pushCtx *containerd.RemoteContext, desc ocispec.Descriptor, ref string, content *Content) error {
 	if pushCtx.PlatformMatcher == nil {
 		if len(pushCtx.Platforms) > 0 {
 			var ps []ocispec.Platform
@@ -218,7 +224,163 @@ func push(ctx context.Context, store content.Store, pushCtx *containerd.RemoteCo
 		limiter = semaphore.NewWeighted(int64(pushCtx.MaxConcurrentUploadedLayers))
 	}
 
-	return remotes.PushContent(ctx, pusher, desc, store, limiter, pushCtx.PlatformMatcher, wrapper)
+	return pushContent(ctx, pusher, desc, store, limiter, pushCtx.PlatformMatcher, wrapper, content)
+}
+
+// Ported from containerd project, copyright The containerd Authors.
+// https://github.com/containerd/containerd/blob/main/remotes/handlers.go
+func pushContent(ctx context.Context, pusher remotes.Pusher, desc ocispec.Descriptor, store content.Provider, limiter *semaphore.Weighted, platform platforms.MatchComparer, wrapper func(h images.Handler) images.Handler, localContent *Content) error {
+
+	var m sync.Mutex
+	manifests := []ocispec.Descriptor{}
+	indexStack := []ocispec.Descriptor{}
+
+	filterHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		switch desc.MediaType {
+		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+			m.Lock()
+			manifests = append(manifests, desc)
+			m.Unlock()
+			return nil, images.ErrStopHandler
+		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+			m.Lock()
+			indexStack = append(indexStack, desc)
+			m.Unlock()
+			return nil, images.ErrStopHandler
+		default:
+			return nil, nil
+		}
+	})
+
+	pushHandler := pushHandler(pusher, store, localContent)
+
+	platformFilterhandler := images.FilterPlatforms(images.ChildrenHandler(store), platform)
+
+	var handler images.Handler
+	if m, ok := store.(content.Manager); ok {
+		annotateHandler := annotateDistributionSourceHandler(platformFilterhandler, m)
+		handler = images.Handlers(annotateHandler, filterHandler, pushHandler)
+	} else {
+		handler = images.Handlers(platformFilterhandler, filterHandler, pushHandler)
+	}
+
+	if wrapper != nil {
+		handler = wrapper(handler)
+	}
+
+	if err := images.Dispatch(ctx, handler, limiter, desc); err != nil {
+		return err
+	}
+
+	if err := images.Dispatch(ctx, pushHandler, limiter, manifests...); err != nil {
+		return err
+	}
+
+	// Iterate in reverse order as seen, parent always uploaded after child
+	for i := len(indexStack) - 1; i >= 0; i-- {
+		err := images.Dispatch(ctx, pushHandler, limiter, indexStack[i])
+		if err != nil {
+			// TODO(estesp): until we have a more complete method for index push, we need to report
+			// missing dependencies in an index/manifest list by sensing the "400 Bad Request"
+			// as a marker for this problem
+			if errors.Unwrap(err) != nil && strings.Contains(errors.Unwrap(err).Error(), "400 Bad Request") {
+				return fmt.Errorf("manifest list/index references to blobs and/or manifests are missing in your target registry: %w", err)
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Ported from containerd project, copyright The containerd Authors.
+// https://github.com/containerd/containerd/blob/main/remotes/handlers.go
+func pushHandler(pusher remotes.Pusher, provider content.Provider, content *Content) images.HandlerFunc {
+	return func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
+			"digest":    desc.Digest,
+			"mediatype": desc.MediaType,
+			"size":      desc.Size,
+		}))
+		content.UpdateTime(&desc.Digest)
+		err := remotePush(ctx, provider, pusher, desc)
+		return nil, err
+	}
+}
+
+// Ported from containerd project, copyright The containerd Authors.
+// https://github.com/containerd/containerd/blob/main/remotes/handlers.go
+func remotePush(ctx context.Context, provider content.Provider, pusher remotes.Pusher, desc ocispec.Descriptor) error {
+	log.G(ctx).Debug("push")
+
+	var (
+		cw  content.Writer
+		err error
+	)
+	if cs, ok := pusher.(content.Ingester); ok {
+		cw, err = content.OpenWriter(ctx, cs, content.WithRef(remotes.MakeRefKey(ctx, desc)), content.WithDescriptor(desc))
+	} else {
+		cw, err = pusher.Push(ctx, desc)
+	}
+	if err != nil {
+		if !errdefs.IsAlreadyExists(err) {
+			return err
+		}
+
+		return nil
+	}
+	defer cw.Close()
+
+	ra, err := provider.ReaderAt(ctx, desc)
+	if err != nil {
+		return err
+	}
+	defer ra.Close()
+
+	rd := io.NewSectionReader(ra, 0, desc.Size)
+	return content.Copy(ctx, cw, rd, desc.Size, desc.Digest)
+}
+
+// Ported from containerd project, copyright The containerd Authors.
+// https://github.com/containerd/containerd/blob/main/remotes/handlers.go
+func annotateDistributionSourceHandler(f images.HandlerFunc, manager content.Manager) images.HandlerFunc {
+	return func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		children, err := f(ctx, desc)
+		if err != nil {
+			return nil, err
+		}
+
+		// only add distribution source for the config or blob data descriptor
+		switch desc.MediaType {
+		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest,
+			images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+		default:
+			return children, nil
+		}
+
+		for i := range children {
+			child := children[i]
+
+			info, err := manager.Info(ctx, child.Digest)
+			if err != nil {
+				return nil, err
+			}
+
+			for k, v := range info.Labels {
+				if !strings.HasPrefix(k, labels.LabelDistributionSource+".") {
+					continue
+				}
+
+				if child.Annotations == nil {
+					child.Annotations = map[string]string{}
+				}
+				child.Annotations[k] = v
+			}
+
+			children[i] = child
+		}
+		return children, nil
+	}
 }
 
 // Ported from containerd project, copyright The containerd Authors.

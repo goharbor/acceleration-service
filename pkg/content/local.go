@@ -120,7 +120,7 @@ func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	return push(ctx, pvd.ContentStore(), rc, desc, ref)
+	return push(ctx, pvd.ContentStore(), rc, desc, ref, pvd.content)
 }
 
 func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descriptor, error) {
