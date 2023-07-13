@@ -42,7 +42,7 @@ var fetchSingleflight = &singleflight.Group{}
 
 // Ported from containerd project, copyright The containerd Authors.
 // github.com/containerd/containerd/blob/main/pull.go
-func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteContext, ref string, limit int, content *Content) (images.Image, error) {
+func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteContext, ref string, limit int) (images.Image, error) {
 	name, desc, err := rCtx.Resolver.Resolve(ctx, ref)
 	if err != nil {
 		return images.Image{}, fmt.Errorf("failed to resolve reference %q: %w", ref, err)
@@ -107,7 +107,7 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 		}
 
 		handlers := append(rCtx.BaseHandlers,
-			fetchHandler(store, fetcher, content),
+			fetchHandler(store, fetcher),
 			convertibleHandler,
 			childrenHandler,
 			appendDistSrcLabelHandler,
@@ -147,7 +147,7 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 
 // Ported from containerd project, copyright The containerd Authors.
 // https://github.com/containerd/containerd/blob/main/remotes/handlers.go
-func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher, content *Content) images.HandlerFunc {
+func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher) images.HandlerFunc {
 	return func(ctx context.Context, desc ocispec.Descriptor) (subdescs []ocispec.Descriptor, err error) {
 		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
 			"digest":    desc.Digest,
@@ -163,7 +163,7 @@ func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher, content *C
 				return nil, remotes.Fetch(ctx, ingester, fetcher, desc)
 			})
 			if errdefs.IsAlreadyExists(err) {
-				return nil, content.UpdateTime(&desc.Digest)
+				return nil, nil
 			}
 			return nil, err
 		}
