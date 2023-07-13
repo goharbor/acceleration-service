@@ -22,15 +22,12 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	bolt "go.etcd.io/bbolt"
 )
 
 type LocalProvider struct {
@@ -52,19 +49,7 @@ func NewLocalProvider(
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider work directory")
 	}
-	store, err := local.NewLabeledStore(contentDir, newMemoryLabelStore())
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "create local provider content store")
-	}
-	bdb, err := bolt.Open(filepath.Join(workDir, "meta.db"), 0655, nil)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "create local provider database")
-	}
-	db := metadata.NewDB(bdb, store, nil)
-	if err := db.Init(context.Background()); err != nil {
-		return nil, nil, err
-	}
-	content, err := NewContent(db, threshold)
+	content, err := NewContent(contentDir, workDir, threshold)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider content")
 	}
@@ -100,7 +85,7 @@ func (pvd *LocalProvider) Pull(ctx context.Context, ref string) error {
 		PlatformMatcher: pvd.platformMC,
 	}
 
-	img, err := fetch(ctx, pvd.ContentStore(), rc, ref, 0, pvd.content)
+	img, err := fetch(ctx, pvd.ContentStore(), rc, ref, 0)
 	if err != nil {
 		return errors.Wrap(err, "pull source image")
 	}

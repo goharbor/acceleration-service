@@ -15,26 +15,16 @@
 package content
 
 import (
-	"context"
 	"os"
 	"testing"
 
-	"github.com/containerd/containerd/content/local"
-	"github.com/containerd/containerd/metadata"
 	"github.com/stretchr/testify/require"
-	bolt "go.etcd.io/bbolt"
 )
 
 func TestContenSize(t *testing.T) {
 	os.MkdirAll("./tmp", 0755)
 	defer os.RemoveAll("./tmp")
-	store, err := local.NewStore("./tmp")
-	require.NoError(t, err)
-	bdb, err := bolt.Open("./tmp/metadata.db", 0655, nil)
-	require.NoError(t, err)
-	db := metadata.NewDB(bdb, store, nil)
-	require.NoError(t, db.Init(context.Background()))
-	content, err := NewContent(db, "1000MB")
+	content, err := NewContent("./tmp", "./tmp", "1000MB")
 	require.NoError(t, err)
 	size, err := content.Size()
 	require.NoError(t, err)

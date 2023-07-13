@@ -18,12 +18,14 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/metadata"
 	"github.com/dustin/go-humanize"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
@@ -42,15 +44,29 @@ type Content struct {
 	threshold int64
 }
 
-func NewContent(db *metadata.DB, threshold string) (*Content, error) {
+func NewContent(contentDir string, databaseDir string, threshold string) (*Content, error) {
+	store, err := newStore(contentDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "create local provider content store")
+	}
+	bdb, err := bolt.Open(filepath.Join(databaseDir, "meta.db"), 0655, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "create local provider database")
+	}
+	db := metadata.NewDB(bdb, store, nil)
+	if err := db.Init(context.Background()); err != nil {
+		return nil, err
+	}
 	t, err := humanize.ParseBytes(threshold)
 	if err != nil {
 		return nil, err
 	}
-	return &Content{
+	content := Content{
 		db:        db,
 		threshold: int64(t),
-	}, nil
+	}
+	store.Init(&content)
+	return &content, nil
 }
 
 // return the content store in db
