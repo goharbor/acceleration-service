@@ -36,6 +36,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/images/converter"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/nydus-snapshotter/pkg/backend"
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	"github.com/opencontainers/image-spec/specs-go"
@@ -210,17 +211,38 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, so
 	if err != nil {
 		return nil, errors.Wrap(err, "get source image")
 	}
-	desc, err := d.convert(ctx, provider, *image, sourceRef)
+
+	//FIXME:here we just use the first part of sourceRef as source,we need to get remote cache name gracefully
+	//split sourceRef to get remote source
+	items := strings.Split(sourceRef, "/")
+	cacheNamed := items[0] + "/library/cache-manifest:latest-nydus"
+
+	remoteCache := accelcontent.NewCache(100)
+
+	pvd, ok := provider.(*accelcontent.LocalProvider)
+	if ok {
+		remoteCache, _ = pvd.FetchRemoteCache(ctx, cacheNamed)
+	}
+
+	d.FetchRemoteBlobs(ctx, provider, *image, cacheNamed, remoteCache)
+
+	desc, err := d.convert(ctx, provider, *image, sourceRef, remoteCache)
 	if err != nil {
 		return nil, err
 	}
 	if d.mergeManifest {
 		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc)
 	}
+	pvd, ok = provider.(*accelcontent.LocalProvider)
+	if ok {
+		err = pvd.UpdateRemoteCache(ctx, remoteCache, cacheNamed)
+	}
+
 	return desc, err
 }
 
-func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, source ocispec.Descriptor, sourceRef string) (*ocispec.Descriptor, error) {
+func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, source ocispec.Descriptor, sourceRef string,
+	remoteCache *accelcontent.Cache) (*ocispec.Descriptor, error) {
 	cs := provider.ContentStore()
 
 	chunkDictPath := ""
@@ -285,14 +307,13 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 	convertHooks := converter.ConvertHooks{
 		PostConvertHook: convertHookFunc,
 	}
-	indexConvertFunc := converter.IndexConvertFuncWithHook(
+	indexConvertFunc := IndexConvertFuncWithHook(
 		nydusify.LayerConvertFunc(packOpt),
 		d.docker2oci,
 		d.platformMC,
 		convertHooks,
 	)
-
-	return indexConvertFunc(ctx, cs, source)
+	return indexConvertFunc(ctx, cs, source, remoteCache)
 }
 
 func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, nydus ocispec.Descriptor) (*ocispec.Descriptor, error) {
@@ -381,4 +402,44 @@ func (d *Driver) getChunkDict(ctx context.Context, provider accelcontent.Provide
 	}
 
 	return &chunkDict, nil
+}
+
+func (*Driver) FetchRemoteBlobs(ctx context.Context, pvd accelcontent.Provider, desc ocispec.Descriptor, ref string,
+	remoteCache *accelcontent.Cache) error {
+
+	if remoteCache == nil || remoteCache.Len() == 0 {
+		return nil
+	}
+	manifest := ocispec.Manifest{}
+	_, err := utils.ReadJSON(ctx, pvd.ContentStore(), &manifest, desc)
+
+	if err != nil {
+		return err
+	}
+
+	lpvd := pvd.(*accelcontent.LocalProvider)
+
+	resolver, err := lpvd.Resolver(ref)
+	if err != nil {
+		return err
+	}
+	fetcher, err := resolver.Fetcher(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	//FIXME:here can be gracefully handled
+	//if we find the blob in remote cache, then we do not convert this layer locally,
+	//this will lend to merge layer failed
+	//so we need to fetch the blob from remote registry which is in remote cache
+
+	layer, ok := remoteCache.Get(desc.Digest.String())
+	if ok {
+		err = remotes.Fetch(ctx, lpvd.ContentStore(), fetcher, layer.(ocispec.Descriptor))
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return nil
 }
