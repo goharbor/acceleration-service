@@ -63,20 +63,21 @@ type chunkDictInfo struct {
 }
 
 type Driver struct {
-	workDir          string
-	builderPath      string
-	fsVersion        string
-	compressor       string
-	chunkDictRef     string
-	mergeManifest    bool
-	ociRef           bool
-	docker2oci       bool
-	alignedChunk     bool
-	chunkSize        string
-	batchSize        string
-	prefetchPatterns string
-	backend          backend.Backend
-	platformMC       platforms.MatchComparer
+	workDir           string
+	builderPath       string
+	fsVersion         string
+	compressor        string
+	chunkDictRef      string
+	mergeManifest     bool
+	ociRef            bool
+	docker2oci        bool
+	alignedChunk      bool
+	chunkSize         string
+	batchSize         string
+	prefetchPatterns  string
+	backend           backend.Backend
+	platformMC        platforms.MatchComparer
+	encryptRecipients []string
 }
 
 func detectBuilderVersion(ctx context.Context, builder string) string {
@@ -174,26 +175,32 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		return nil, errors.Wrap(err, "invalid oci_ref option")
 	}
 
+	encryptRecipients := []string{}
+	if cfg["encrypt_recipients"] != "" {
+		encryptRecipients = strings.Split(cfg["encrypt_recipients"], ",")
+	}
+
 	if ociRef && fsVersion != "6" {
 		logrus.Warn("forcibly using fs version 6 when oci_ref option enabled")
 		fsVersion = "6"
 	}
 
 	return &Driver{
-		workDir:          workDir,
-		builderPath:      builderPath,
-		fsVersion:        fsVersion,
-		compressor:       compressor,
-		chunkDictRef:     chunkDictRef,
-		mergeManifest:    mergeManifest,
-		ociRef:           ociRef,
-		docker2oci:       docker2oci,
-		alignedChunk:     fsAlignChunk,
-		chunkSize:        fsChunkSize,
-		batchSize:        BatchSize,
-		prefetchPatterns: prefetchPatterns,
-		backend:          _backend,
-		platformMC:       platformMC,
+		workDir:           workDir,
+		builderPath:       builderPath,
+		fsVersion:         fsVersion,
+		compressor:        compressor,
+		chunkDictRef:      chunkDictRef,
+		mergeManifest:     mergeManifest,
+		ociRef:            ociRef,
+		docker2oci:        docker2oci,
+		alignedChunk:      fsAlignChunk,
+		chunkSize:         fsChunkSize,
+		batchSize:         BatchSize,
+		prefetchPatterns:  prefetchPatterns,
+		backend:           _backend,
+		platformMC:        platformMC,
+		encryptRecipients: encryptRecipients,
 	}, nil
 }
 
@@ -244,16 +251,18 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		AlignedChunk:     d.alignedChunk,
 		ChunkSize:        d.chunkSize,
 		BatchSize:        d.batchSize,
+		Encrypt:          len(d.encryptRecipients) != 0,
 	}
 	mergeOpt := nydusify.MergeOption{
-		WorkDir:          packOpt.WorkDir,
-		BuilderPath:      packOpt.BuilderPath,
-		FsVersion:        packOpt.FsVersion,
-		ChunkDictPath:    packOpt.ChunkDictPath,
-		PrefetchPatterns: packOpt.PrefetchPatterns,
-		Backend:          packOpt.Backend,
-		OCI:              d.docker2oci,
-		OCIRef:           packOpt.OCIRef,
+		WorkDir:           packOpt.WorkDir,
+		BuilderPath:       packOpt.BuilderPath,
+		FsVersion:         packOpt.FsVersion,
+		ChunkDictPath:     packOpt.ChunkDictPath,
+		PrefetchPatterns:  packOpt.PrefetchPatterns,
+		Backend:           packOpt.Backend,
+		OCI:               d.docker2oci,
+		OCIRef:            packOpt.OCIRef,
+		EncryptRecipients: d.encryptRecipients,
 	}
 	convertHookFunc := func(
 		ctx context.Context, cs content.Store, orgDesc ocispec.Descriptor, newDesc *ocispec.Descriptor,
