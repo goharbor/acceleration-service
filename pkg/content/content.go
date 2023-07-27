@@ -16,36 +16,34 @@ package content
 
 import (
 	"context"
-	"encoding/binary"
-	"fmt"
 	"path/filepath"
 	"time"
 
-	"github.com/containerd/containerd/content"
+	containerdContent "github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/metadata"
 	"github.com/dustin/go-humanize"
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
-var (
-	bucketKeyVersion       = []byte("v1")
-	bucketKeyObjectContent = []byte("content")
-	bucketKeyObjectBlob    = []byte("blob")
-
-	bucketKeySize      = []byte("size")
-	bucketKeyUpdatedAt = []byte("updatedat")
-)
-
 type Content struct {
-	db        *metadata.DB
+	//db is the bolt database of content
+	db *metadata.DB
+	//store is the local content store wrapped inner db
+	store containerdContent.Store
+	//threshold is the maximum capacity of the local caches storage
 	threshold int64
 }
 
+// NewContent return content support by content store, bolt database and threshold.
+// content store created in contentDir and  bolt database created in databaseDir.
+// content.db supported by bolt database and content store, content.lm supported by content.db.
 func NewContent(contentDir string, databaseDir string, threshold string) (*Content, error) {
-	store, err := newStore(contentDir)
+	store, err := local.NewLabeledStore(contentDir, newMemoryLabelStore())
 	if err != nil {
 		return nil, errors.Wrap(err, "create local provider content store")
 	}
@@ -63,15 +61,10 @@ func NewContent(contentDir string, databaseDir string, threshold string) (*Conte
 	}
 	content := Content{
 		db:        db,
+		store:     db.ContentStore(),
 		threshold: int64(t),
 	}
-	store.Init(&content)
 	return &content, nil
-}
-
-// return the content store in db
-func (content *Content) ContentStore() content.Store {
-	return content.db.ContentStore()
 }
 
 // Size return the size of local caches size
@@ -99,14 +92,6 @@ func (content *Content) Size() (int64, error) {
 	return contentSize, nil
 }
 
-func blobSize(bucket *bolt.Bucket) (int64, error) {
-	size, bytesRead := binary.Varint(bucket.Get(bucketKeySize))
-	if bytesRead <= 0 {
-		return 0, fmt.Errorf("read size from database")
-	}
-	return size, nil
-}
-
 // GC clean the local caches by cfg.Provider.GCPolicy configuration
 func (content *Content) GC(ctx context.Context) error {
 	size, err := content.Size()
@@ -124,8 +109,8 @@ func (content *Content) GC(ctx context.Context) error {
 	return nil
 }
 
-// update the latest used time
-func (content *Content) UpdateTime(digest *digest.Digest) error {
+// updateTime update the latest used time
+func (content *Content) updateTime(digest *digest.Digest) error {
 	return content.db.Update(func(tx *bolt.Tx) error {
 		bucket := getBlobBucket(tx, *digest)
 		updatedAt, err := time.Now().UTC().MarshalBinary()
@@ -136,23 +121,42 @@ func (content *Content) UpdateTime(digest *digest.Digest) error {
 	})
 }
 
-func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
-	bucket := tx.Bucket(keys[0])
+func (content *Content) Info(ctx context.Context, dgst digest.Digest) (containerdContent.Info, error) {
+	return content.store.Info(ctx, dgst)
+}
 
-	for _, key := range keys[1:] {
-		if bucket == nil {
-			break
-		}
-		bucket = bucket.Bucket(key)
+func (content *Content) Update(ctx context.Context, info containerdContent.Info, fieldpaths ...string) (containerdContent.Info, error) {
+	return content.store.Update(ctx, info, fieldpaths...)
+}
+
+func (content *Content) Walk(ctx context.Context, fn containerdContent.WalkFunc, filters ...string) error {
+	return content.store.Walk(ctx, fn, filters...)
+}
+
+func (content *Content) Delete(ctx context.Context, dgst digest.Digest) error {
+	return content.store.Delete(ctx, dgst)
+}
+
+func (content *Content) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (containerdContent.ReaderAt, error) {
+	readerAt, err := content.store.ReaderAt(ctx, desc)
+	if err != nil {
+		return readerAt, err
 	}
-
-	return bucket
+	return readerAt, content.updateTime(&desc.Digest)
 }
 
-func getBlobsBucket(tx *bolt.Tx) *bolt.Bucket {
-	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectContent, bucketKeyObjectBlob)
+func (content *Content) Status(ctx context.Context, ref string) (containerdContent.Status, error) {
+	return content.store.Status(ctx, ref)
 }
 
-func getBlobBucket(tx *bolt.Tx, dgst digest.Digest) *bolt.Bucket {
-	return getBucket(tx, bucketKeyVersion, []byte("acceleration-service"), bucketKeyObjectContent, bucketKeyObjectBlob, []byte(dgst.String()))
+func (content *Content) ListStatuses(ctx context.Context, filters ...string) ([]containerdContent.Status, error) {
+	return content.store.ListStatuses(ctx, filters...)
+}
+
+func (content *Content) Abort(ctx context.Context, ref string) error {
+	return content.store.Abort(ctx, ref)
+}
+
+func (content *Content) Writer(ctx context.Context, opts ...containerdContent.WriterOpt) (containerdContent.Writer, error) {
+	return content.store.Writer(ctx, opts...)
 }
