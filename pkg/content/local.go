@@ -113,7 +113,7 @@ func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descr
 }
 
 func (pvd *LocalProvider) ContentStore() content.Store {
-	return pvd.content.ContentStore()
+	return pvd.content
 }
 
 func (pvd *LocalProvider) setImage(ref string, image *ocispec.Descriptor) {
