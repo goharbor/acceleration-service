@@ -78,6 +78,7 @@ type Driver struct {
 	backend           backend.Backend
 	platformMC        platforms.MatchComparer
 	encryptRecipients []string
+	withReferrer      bool
 }
 
 func detectBuilderVersion(ctx context.Context, builder string) string {
@@ -175,6 +176,11 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		return nil, errors.Wrap(err, "invalid oci_ref option")
 	}
 
+	withReferrer, err := parseBool(cfg["with_referrer"])
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid with_referrer option")
+	}
+
 	encryptRecipients := []string{}
 	if cfg["encrypt_recipients"] != "" {
 		encryptRecipients = strings.Split(cfg["encrypt_recipients"], ",")
@@ -201,6 +207,7 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		backend:           _backend,
 		platformMC:        platformMC,
 		encryptRecipients: encryptRecipients,
+		withReferrer:      withReferrer,
 	}, nil
 }
 
@@ -263,6 +270,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		OCI:               d.docker2oci,
 		OCIRef:            packOpt.OCIRef,
 		EncryptRecipients: d.encryptRecipients,
+		WithReferrer:      d.withReferrer,
 	}
 	convertHookFunc := func(
 		ctx context.Context, cs content.Store, orgDesc ocispec.Descriptor, newDesc *ocispec.Descriptor,
