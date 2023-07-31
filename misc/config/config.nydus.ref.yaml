@@ -51,6 +51,13 @@ converter:
 
       # convert to OCI-referenced nydus zran image.
       oci_ref: true
+
+      # with this option, we can track all nydus images associated with
+      # an OCI image. For example, in Harbor we can cascade to show nydus
+      # images linked to an OCI image, deleting the OCI image can also delete
+      # the corresponding nydus images. At runtime, nydus snapshotter can also
+      # automatically upgrade an OCI image run to nydus image.
+      with_referrer: true
   rules:
     # add suffix to tag of source image reference as target image reference
     - tag_suffix: -nydus-oci-ref
