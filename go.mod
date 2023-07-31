@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/containerd/containerd v1.7.2
-	github.com/containerd/nydus-snapshotter v0.9.0
+	github.com/containerd/nydus-snapshotter v0.10.0
 	github.com/containerd/stargz-snapshotter v0.14.3
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3
 	github.com/docker/cli v23.0.3+incompatible
