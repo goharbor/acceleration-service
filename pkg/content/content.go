@@ -126,6 +126,9 @@ func (content *Content) Info(ctx context.Context, dgst digest.Digest) (content.I
 }
 
 func (content *Content) Update(ctx context.Context, info content.Info, fieldpaths ...string) (content.Info, error) {
+	if info.Labels != nil {
+		info.Labels = nil
+	}
 	return content.store.Update(ctx, info, fieldpaths...)
 }
 
@@ -158,5 +161,16 @@ func (content *Content) Abort(ctx context.Context, ref string) error {
 }
 
 func (content *Content) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
-	return content.store.Writer(ctx, opts...)
+	writer, err := content.store.Writer(ctx, opts...)
+	return &localWriter{writer}, err
+}
+
+// localWriter wrap the content.Writer
+type localWriter struct {
+	content.Writer
+}
+
+func (localWriter localWriter) Commit(ctx context.Context, size int64, expected digest.Digest, opts ...content.Opt) error {
+	// we don't write any lables, drop the opts
+	return localWriter.Writer.Commit(ctx, size, expected)
 }
