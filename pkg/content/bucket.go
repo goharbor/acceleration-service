@@ -18,21 +18,24 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/opencontainers/go-digest"
 	bolt "go.etcd.io/bbolt"
 )
 
 var (
 	bucketKeyObjectContent = []byte("content")
 	bucketKeyObjectBlob    = []byte("blob")
+	bucketKeyObjectLeases  = []byte("leases")
 
 	bucketKeyVersion   = []byte("v1")
 	bucketKeyNamespace = []byte(accelerationServiceNamespace)
 	bucketKeySize      = []byte("size")
-	bucketKeyUpdatedAt = []byte("updatedat")
 )
 
-const accelerationServiceNamespace = "acceleration-service"
+const (
+	accelerationServiceNamespace = "acceleration-service"
+	usedAtLabel                  = "usedat"
+	usedCountLabel               = "usedcount"
+)
 
 func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
 	bucket := tx.Bucket(keys[0])
@@ -52,9 +55,9 @@ func getBlobsBucket(tx *bolt.Tx) *bolt.Bucket {
 	return getBucket(tx, bucketKeyVersion, bucketKeyNamespace, bucketKeyObjectContent, bucketKeyObjectBlob)
 }
 
-// getBlobBucket return the blob bucket by digest
-func getBlobBucket(tx *bolt.Tx, digst digest.Digest) *bolt.Bucket {
-	return getBucket(tx, bucketKeyVersion, bucketKeyNamespace, bucketKeyObjectContent, bucketKeyObjectBlob, []byte(digst.String()))
+// get the lease bucket by lease id
+func getLeaseBucket(tx *bolt.Tx, lease string) *bolt.Bucket {
+	return getBucket(tx, bucketKeyVersion, bucketKeyNamespace, bucketKeyObjectLeases, []byte(lease))
 }
 
 // bolbSize return the content blob size in a bucket
