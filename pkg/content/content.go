@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/sync/singleflight"
 )
 
 type Content struct {
@@ -40,6 +41,8 @@ type Content struct {
 	db *metadata.DB
 	// lm is lease manager for managing leases using the provided database transaction.
 	lm leases.Manager
+	// gcSingleflight help to resolve concurrent gc
+	gcSingleflight *singleflight.Group
 	// store is the local content store wrapped inner db
 	store content.Store
 	// threshold is the maximum capacity of the local caches storage
@@ -67,10 +70,11 @@ func NewContent(contentDir string, databaseDir string, threshold string) (*Conte
 		return nil, err
 	}
 	content := Content{
-		db:        db,
-		lm:        metadata.NewLeaseManager(db),
-		store:     db.ContentStore(),
-		threshold: int64(t),
+		db:             db,
+		lm:             metadata.NewLeaseManager(db),
+		gcSingleflight: &singleflight.Group{},
+		store:          db.ContentStore(),
+		threshold:      int64(t),
 	}
 	return &content, nil
 }
@@ -108,15 +112,25 @@ func (content *Content) GC(ctx context.Context) error {
 	}
 	// if the local content size over eighty percent of threshold, gc start
 	if size > (content.threshold*int64(80))/100 {
-		if err := content.cleanLeases(ctx, size-(content.threshold*int64(80))/100); err != nil {
+		if _, err, _ := content.gcSingleflight.Do(accelerationServiceNamespace, func() (interface{}, error) {
+			return nil, content.garbageCollect(ctx, size-(content.threshold*int64(80))/100)
+		}); err != nil {
 			return err
 		}
-		gcStatus, err := content.db.GarbageCollect(ctx)
-		if err != nil {
-			return err
-		}
-		logrus.Infof("garbage collect, elapse %s", gcStatus.Elapsed())
 	}
+	return nil
+}
+
+// garbageCollect clean the local caches by lease
+func (content *Content) garbageCollect(ctx context.Context, size int64) error {
+	if err := content.cleanLeases(ctx, size); err != nil {
+		return err
+	}
+	gcStatus, err := content.db.GarbageCollect(ctx)
+	if err != nil {
+		return err
+	}
+	logrus.Infof("garbage collect, elapse %s", gcStatus.Elapsed())
 	return nil
 }
 
