@@ -10,6 +10,7 @@ require (
 	github.com/docker/cli v23.0.3+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/uuid v1.3.0
+	github.com/hashicorp/golang-lru/v2 v2.0.5
 	github.com/labstack/echo-contrib v0.14.1
 	github.com/labstack/echo/v4 v4.10.2
 	github.com/labstack/gommon v0.4.0

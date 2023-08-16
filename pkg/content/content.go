@@ -16,8 +16,8 @@ package content
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"time"
 
@@ -43,6 +43,8 @@ type Content struct {
 	lm leases.Manager
 	// gcSingleflight help to resolve concurrent gc
 	gcSingleflight *singleflight.Group
+	// lc cache the used count and reference order of lease
+	lc *leaseCache
 	// store is the local content store wrapped inner db
 	store content.Store
 	// threshold is the maximum capacity of the local caches storage
@@ -69,10 +71,16 @@ func NewContent(contentDir string, databaseDir string, threshold string) (*Conte
 	if err != nil {
 		return nil, err
 	}
+	lm := metadata.NewLeaseManager(db)
+	lc := newLeaseCache()
+	if err := lc.Init(lm); err != nil {
+		return nil, err
+	}
 	content := Content{
 		db:             db,
 		lm:             metadata.NewLeaseManager(db),
 		gcSingleflight: &singleflight.Group{},
+		lc:             lc,
 		store:          db.ContentStore(),
 		threshold:      int64(t),
 	}
@@ -136,17 +144,16 @@ func (content *Content) garbageCollect(ctx context.Context, size int64) error {
 
 // cleanLeases use lease to manage content blob, delete lease of content which should be gc
 func (content *Content) cleanLeases(ctx context.Context, size int64) error {
-	ls, err := content.lm.List(ctx)
-	if err != nil {
-		return err
-	}
-	// TODO: now the order of gc is LRU, should update to LRFU by usedCountLabel
-	sort.Slice(ls, func(i, j int) bool {
-		return ls[i].Labels[usedAtLabel] < ls[j].Labels[usedAtLabel]
-	})
-	for _, lease := range ls {
+	for size > 0 {
+		if content.lc.Len() == 0 {
+			return fmt.Errorf("cleanLeases: leaseCache is empty, error caches")
+		}
+		digest, err := content.lc.Remove()
+		if err != nil {
+			return err
+		}
 		if err := content.db.View(func(tx *bolt.Tx) error {
-			blobsize, err := blobSize(getBlobsBucket(tx).Bucket([]byte(lease.ID)))
+			blobsize, err := blobSize(getBlobsBucket(tx).Bucket([]byte(digest)))
 			if err != nil {
 				return err
 			}
@@ -155,15 +162,16 @@ func (content *Content) cleanLeases(ctx context.Context, size int64) error {
 		}); err != nil {
 			return err
 		}
-		if err := content.lm.Delete(ctx, lease); err != nil {
+		contentLease, err := content.lm.List(ctx, "id=="+digest)
+		if err != nil {
 			return err
 		}
-		if size <= 0 {
-			break
+		if len(contentLease) != 1 {
+			return fmt.Errorf("cleanLeases: find lease by digest failed")
 		}
-	}
-	if err != nil {
-		return err
+		if err := content.lm.Delete(ctx, contentLease[0]); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -207,6 +215,9 @@ func (content *Content) updateLease(digest *digest.Digest) error {
 				return err
 			}
 			usedCount++
+		}
+		if err := content.lc.Add(digest.String(), strconv.Itoa(usedCount)); err != nil {
+			return err
 		}
 		// write the new labels into lease bucket
 		return boltutil.WriteLabels(bucket, map[string]string{
