@@ -12,7 +12,7 @@ provider:
       auth: YWRtaW46SGFyYm9yMTIzNDU=
   work_dir: /tmp
   gcpolicy:
-      threshold: 100MB
+      threshold: 10MB
 
 converter:
   worker: 5
