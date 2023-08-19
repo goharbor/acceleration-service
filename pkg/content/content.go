@@ -268,15 +268,17 @@ func (content *Content) Abort(ctx context.Context, ref string) error {
 
 func (content *Content) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
 	writer, err := content.store.Writer(ctx, opts...)
-	return &localWriter{writer}, err
+	return &localWriter{writer, content}, err
 }
 
 // localWriter wrap the content.Writer
 type localWriter struct {
 	content.Writer
+	content *Content
 }
 
 func (localWriter localWriter) Commit(ctx context.Context, size int64, expected digest.Digest, opts ...content.Opt) error {
 	// we don't write any lables, drop the opts
+	localWriter.content.updateLease(&expected)
 	return localWriter.Writer.Commit(ctx, size, expected)
 }
