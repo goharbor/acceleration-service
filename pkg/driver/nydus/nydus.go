@@ -17,7 +17,9 @@ package nydus
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -25,19 +27,20 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/content"
+	containerdErrDefs "github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/converter"
+	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/nydus-snapshotter/pkg/backend"
+	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
 	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/utils"
-
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/images/converter"
-	"github.com/containerd/containerd/platforms"
-	"github.com/containerd/nydus-snapshotter/pkg/backend"
-	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -57,6 +60,8 @@ const (
 
 var builderVersion string
 var builderVersionOnce sync.Once
+
+type CacheRef struct{}
 
 type chunkDictInfo struct {
 	BootstrapPath string
@@ -224,12 +229,39 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, so
 	if err != nil {
 		return nil, errors.Wrap(err, "get source image")
 	}
+
+	cacheRef := provider.GetCacheRef()
+	useRemoteCache := cacheRef != ""
+	if useRemoteCache {
+		logrus.Infof("remote cache image reference: %s", cacheRef)
+		if err := d.FetchRemoteCache(ctx, provider, cacheRef); err != nil {
+			if errors.Is(err, errdefs.ErrNotSupport) {
+				logrus.Warn("Content store does not support remote cache")
+			} else {
+				return nil, errors.Wrap(err, "fetch remote cache")
+			}
+		}
+	}
+
 	desc, err := d.convert(ctx, provider, *image, sourceRef)
 	if err != nil {
 		return nil, err
 	}
 	if d.mergeManifest {
 		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc)
+	}
+
+	if useRemoteCache {
+		// Fetch the old remote cache before updating and pushing the new one to avoid conflict.
+		if err := d.FetchRemoteCache(ctx, provider, cacheRef); err != nil {
+			return nil, errors.Wrap(err, "fetch remote cache")
+		}
+		if err := d.UpdateRemoteCache(ctx, provider, *image, *desc); err != nil {
+			return nil, errors.Wrap(err, "update remote cache")
+		}
+		if err := d.PushRemoteCache(ctx, provider, cacheRef); err != nil {
+			return nil, errors.Wrap(err, "push remote cache")
+		}
 	}
 	return desc, err
 }
@@ -398,4 +430,153 @@ func (d *Driver) getChunkDict(ctx context.Context, provider accelcontent.Provide
 	}
 
 	return &chunkDict, nil
+}
+
+// FetchRemoteCache fetch cache manifest from remote
+func (d *Driver) FetchRemoteCache(ctx context.Context, pvd accelcontent.Provider, ref string) error {
+	resolver, err := pvd.Resolver(ref)
+	if err != nil {
+		return err
+	}
+
+	rc := &containerd.RemoteContext{
+		Resolver: resolver,
+	}
+	name, desc, err := rc.Resolver.Resolve(ctx, ref)
+	if err != nil {
+		if errors.Is(err, containerdErrDefs.ErrNotFound) {
+			// Remote cache may do not exist, just return nil
+			return nil
+		}
+		return err
+	}
+	fetcher, err := rc.Resolver.Fetcher(ctx, name)
+	if err != nil {
+		return err
+	}
+	ir, err := fetcher.Fetch(ctx, desc)
+	if err != nil {
+		if errdefs.NeedsRetryWithHTTP(err) {
+			pvd.UsePlainHTTP()
+			ir, err = fetcher.Fetch(ctx, desc)
+			if err != nil {
+				return errors.Wrap(err, "try to pull remote cache")
+			}
+		} else {
+			return errors.Wrap(err, "pull remote cache")
+		}
+	}
+
+	bytes, err := io.ReadAll(ir)
+	if err != nil {
+		return errors.Wrap(err, "read remote cache to bytes")
+	}
+
+	// TODO: handle manifest list for multiple platform.
+	manifest := ocispec.Manifest{}
+	if err = json.Unmarshal(bytes, &manifest); err != nil {
+		return err
+	}
+
+	cs := pvd.ContentStore()
+	for _, layer := range manifest.Layers {
+		if _, err := cs.Update(ctx, content.Info{
+			Digest: layer.Digest,
+			Size:   layer.Size,
+			Labels: layer.Annotations,
+		}); err != nil {
+			if errors.Is(err, containerdErrDefs.ErrNotFound) {
+				return errdefs.ErrNotSupport
+			}
+			return errors.Wrap(err, "update cache layer")
+		}
+	}
+	return nil
+}
+
+// PushRemoteCache update cache manifest and push to remote
+func (d *Driver) PushRemoteCache(ctx context.Context, pvd accelcontent.Provider, ref string) error {
+	imageConfig := ocispec.ImageConfig{}
+	imageConfigDesc, imageConfigBytes, err := nydusutils.MarshalToDesc(imageConfig, ocispec.MediaTypeImageConfig)
+	if err != nil {
+		return errors.Wrap(err, "remote cache image config marshal failed")
+	}
+	configReader := bytes.NewReader(imageConfigBytes)
+	if err = content.WriteBlob(ctx, pvd.ContentStore(), ref, configReader, *imageConfigDesc); err != nil {
+		return errors.Wrap(err, "remote cache image config write blob failed")
+	}
+
+	cs := pvd.ContentStore()
+	layers := []ocispec.Descriptor{}
+	if err = cs.Walk(ctx, func(info content.Info) error {
+		if _, ok := info.Labels[nydusutils.LayerAnnotationNydusSourceDigest]; ok {
+			layers = append(layers, ocispec.Descriptor{
+				MediaType:   nydusutils.MediaTypeNydusBlob,
+				Digest:      info.Digest,
+				Size:        info.Size,
+				Annotations: info.Labels,
+			})
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "get remote cache layers failed")
+	}
+
+	manifest := ocispec.Manifest{
+		Versioned: specs.Versioned{
+			SchemaVersion: 2,
+		},
+		MediaType: ocispec.MediaTypeImageManifest,
+		Config:    *imageConfigDesc,
+		Layers:    layers,
+	}
+	manifestDesc, manifestBytes, err := nydusutils.MarshalToDesc(manifest, ocispec.MediaTypeImageManifest)
+	if err != nil {
+		return errors.Wrap(err, "remote cache manifest marshal failed")
+	}
+	manifestReader := bytes.NewReader(manifestBytes)
+	if err = content.WriteBlob(ctx, pvd.ContentStore(), ref, manifestReader, *manifestDesc); err != nil {
+		return errors.Wrap(err, "remote cache write blob failed")
+	}
+
+	if err = pvd.Push(ctx, *manifestDesc, ref); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateRemoteCache update cache layer from upper to lower
+func (d *Driver) UpdateRemoteCache(ctx context.Context, provider accelcontent.Provider, orgDesc ocispec.Descriptor, newDesc ocispec.Descriptor) error {
+	cs := provider.ContentStore()
+
+	orgManifest := ocispec.Manifest{}
+	_, err := utils.ReadJSON(ctx, cs, &orgManifest, orgDesc)
+	if err != nil {
+		return errors.Wrap(err, "read original manifest json")
+	}
+
+	newManifest := ocispec.Manifest{}
+	_, err = utils.ReadJSON(ctx, cs, &newManifest, newDesc)
+	if err != nil {
+		return errors.Wrap(err, "read new manifest json")
+	}
+	newLayers := newManifest.Layers[:len(newManifest.Layers)-1]
+
+	// Update <LayerAnnotationNydusSourceDigest> label for each layer
+	for i, layer := range newLayers {
+		layer.Annotations[nydusutils.LayerAnnotationNydusSourceDigest] = orgManifest.Layers[i].Digest.String()
+	}
+
+	// Update cache to lru from upper to lower
+	for i := len(newLayers) - 1; i >= 0; i-- {
+		layer := newLayers[i]
+		if _, err := cs.Update(ctx, content.Info{
+			Digest: layer.Digest,
+			Size:   layer.Size,
+			Labels: layer.Annotations,
+		}); err != nil {
+			return errors.Wrap(err, "update cache layer")
+		}
+	}
+	return nil
 }
