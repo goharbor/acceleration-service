@@ -24,6 +24,11 @@ import (
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 )
 
+const (
+	TagSuffix      = "tag_suffix"
+	CacheTagSuffix = "cache_tag_suffix"
+)
+
 // Add suffix to source image reference as the target
 // image reference, for example:
 // Source: 192.168.1.1/nginx:latest
@@ -47,16 +52,33 @@ type Rule struct {
 
 // Map maps the source image reference to a new one according to
 // a rule, the new one will be used as the reference of target image.
-func (rule *Rule) Map(ref string) (string, error) {
-	for _, item := range rule.items {
-		if item.TagSuffix != "" {
-			if strings.HasSuffix(ref, item.TagSuffix) {
-				// FIXME: To check if an image has been converted, a better solution
-				// is to use the annotation on image manifest.
-				return "", errdefs.ErrAlreadyConverted
+func (rule *Rule) Map(ref, opt string) (string, error) {
+	switch opt {
+	case TagSuffix:
+		for _, item := range rule.items {
+			if item.TagSuffix != "" {
+				if strings.HasSuffix(ref, item.TagSuffix) {
+					// FIXME: To check if an image has been converted, a better solution
+					// is to use the annotation on image manifest.
+					return "", errdefs.ErrAlreadyConverted
+				}
+				return addSuffix(ref, item.TagSuffix)
 			}
-			return addSuffix(ref, item.TagSuffix)
 		}
+	case CacheTagSuffix:
+		for _, item := range rule.items {
+			if item.CacheTagSuffix != "" {
+				if strings.HasSuffix(ref, item.CacheTagSuffix) {
+					// FIXME: Ditto.A better way is to use the annotation on image manifest.
+					return "", errdefs.ErrIsRemoteCache
+				}
+				return addSuffix(ref, item.CacheTagSuffix)
+			}
+		}
+		// CacheTagSuffix empty means do not provide remote cache, just return empty string.
+		return "", nil
+	default:
+		return "", fmt.Errorf("unsupported map option: %s", opt)
 	}
 	return "", errors.New("not found matched conversion rule")
 }

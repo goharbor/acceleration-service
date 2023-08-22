@@ -61,7 +61,7 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, errors.Wrap(err, "invalid platform configuration")
 	}
 
-	provider, content, err := content.NewLocalProvider(cfg.Provider.WorkDir, cfg.Provider.GCPolicy.Threshold, cfg.Host, platformMC)
+	provider, content, err := content.NewLocalProvider(cfg, platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "create content provider")
 	}
@@ -95,7 +95,7 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 }
 
 func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
-	target, err := adp.rule.Map(source)
+	target, err := adp.rule.Map(source, TagSuffix)
 	if err != nil {
 		if errors.Is(err, errdefs.ErrAlreadyConverted) {
 			logrus.Infof("image has been converted: %s", source)
@@ -103,7 +103,17 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		}
 		return errors.Wrap(err, "create target reference by rule")
 	}
-	if _, err = adp.cvt.Convert(ctx, source, target); err != nil {
+	cacheRef, err := adp.rule.Map(source, CacheTagSuffix)
+	if err != nil {
+		if errors.Is(err, errdefs.ErrIsRemoteCache) {
+			logrus.Infof("image was remote cache: %s", source)
+			return nil
+		}
+	}
+	if err = adp.content.NewRemoteCache(cacheRef); err != nil {
+		return err
+	}
+	if _, err = adp.cvt.Convert(ctx, source, target, cacheRef); err != nil {
 		return err
 	}
 	if err := adp.content.GC(ctx); err != nil {

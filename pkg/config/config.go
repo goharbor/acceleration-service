@@ -46,9 +46,10 @@ type MetricConfig struct {
 }
 
 type ProviderConfig struct {
-	Source   map[string]SourceConfig `yaml:"source"`
-	WorkDir  string                  `yaml:"work_dir"`
-	GCPolicy GCPolicy                `yaml:"gcpolicy"`
+	Source    map[string]SourceConfig `yaml:"source"`
+	WorkDir   string                  `yaml:"work_dir"`
+	GCPolicy  GCPolicy                `yaml:"gcpolicy"`
+	CacheSize int                     `yaml:"cache_size"`
 }
 
 type GCPolicy struct {
@@ -66,7 +67,8 @@ type SourceConfig struct {
 }
 
 type ConversionRule struct {
-	TagSuffix string `yaml:"tag_suffix"`
+	TagSuffix      string `yaml:"tag_suffix"`
+	CacheTagSuffix string `yaml:"cache_tag_suffix"`
 }
 
 type ConverterConfig struct {
@@ -136,4 +138,13 @@ func (cfg *Config) Host(ref string) (remote.CredentialFunc, bool, error) {
 		}
 		return ary[0], ary[1], nil
 	}, auth.Insecure, nil
+}
+
+func (cfg *Config) EnableRemoteCache() bool {
+	for _, rule := range cfg.Converter.Rules {
+		if rule.CacheTagSuffix != "" {
+			return true
+		}
+	}
+	return false
 }

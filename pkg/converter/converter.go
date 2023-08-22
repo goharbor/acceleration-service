@@ -88,7 +88,7 @@ func (cvt *Converter) pull(ctx context.Context, source string) error {
 	return nil
 }
 
-func (cvt *Converter) Convert(ctx context.Context, source, target string) (*Metric, error) {
+func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef string) (*Metric, error) {
 	var metric Metric
 	sourceNamed, err := docker.ParseDockerRef(source)
 	if err != nil {
@@ -122,6 +122,7 @@ func (cvt *Converter) Convert(ctx context.Context, source, target string) (*Metr
 
 	logger.Infof("converting image %s", source)
 	start = time.Now()
+	cvt.provider.SetCacheRef(cacheRef)
 	desc, err := cvt.driver.Convert(ctx, cvt.provider, source)
 	if err != nil {
 		return nil, errors.Wrap(err, "convert image")
