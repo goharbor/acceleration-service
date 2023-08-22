@@ -21,13 +21,17 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/containerd/containerd/content"
+	ctrcontent "github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
+	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/filters"
 	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/dustin/go-humanize"
+	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
+	"github.com/goharbor/acceleration-service/pkg/remote"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -46,15 +50,17 @@ type Content struct {
 	// lc cache the used count and reference order of lease
 	lc *leaseCache
 	// store is the local content store wrapped inner db
-	store content.Store
+	store ctrcontent.Store
 	// threshold is the maximum capacity of the local caches storage
 	threshold int64
+	// remoteCache is the cache of remote layers
+	remoteCache *RemoteCache
 }
 
 // NewContent return content support by content store, bolt database and threshold.
 // content store created in contentDir and  bolt database created in databaseDir.
 // content.db supported by bolt database and content store, content.lm supported by content.db.
-func NewContent(contentDir string, databaseDir string, threshold string) (*Content, error) {
+func NewContent(contentDir string, databaseDir string, threshold string, useRemoteCache bool, cacheSize int, host remote.HostFunc) (*Content, error) {
 	store, err := local.NewLabeledStore(contentDir, newMemoryLabelStore())
 	if err != nil {
 		return nil, errors.Wrap(err, "create local provider content store")
@@ -76,6 +82,15 @@ func NewContent(contentDir string, databaseDir string, threshold string) (*Conte
 	if err := lc.Init(lm); err != nil {
 		return nil, err
 	}
+	var remoteCache *RemoteCache
+	if useRemoteCache {
+		remoteCache, err = NewRemoteCache(cacheSize, host)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		remoteCache = nil
+	}
 	content := Content{
 		db:             db,
 		lm:             metadata.NewLeaseManager(db),
@@ -83,6 +98,7 @@ func NewContent(contentDir string, databaseDir string, threshold string) (*Conte
 		lc:             lc,
 		store:          db.ContentStore(),
 		threshold:      int64(t),
+		remoteCache:    remoteCache,
 	}
 	return &content, nil
 }
@@ -227,38 +243,100 @@ func (content *Content) updateLease(digest *digest.Digest) error {
 	})
 }
 
-func (content *Content) Info(ctx context.Context, dgst digest.Digest) (content.Info, error) {
-	return content.store.Info(ctx, dgst)
+func (content *Content) Info(ctx context.Context, dgst digest.Digest) (ctrcontent.Info, error) {
+	info, err := content.store.Info(ctx, dgst)
+	if content.remoteCache != nil {
+		if err != nil {
+			if errors.Is(err, errdefs.ErrNotFound) {
+				layers := content.remoteCache.Values()
+				for _, layer := range layers {
+					if layer.Digest == dgst {
+						return ctrcontent.Info{
+							Digest: layer.Digest,
+							Size:   layer.Size,
+							Labels: layer.Annotations,
+						}, nil
+					}
+				}
+			}
+			return info, err
+		}
+		if desc, ok := content.remoteCache.Get(dgst.String()); ok {
+			if info.Labels == nil {
+				info.Labels = map[string]string{}
+			}
+			info.Labels[nydusutils.LayerAnnotationNydusTargetDigest] = desc.Digest.String()
+		}
+	}
+	return info, err
 }
 
-func (content *Content) Update(ctx context.Context, info content.Info, fieldpaths ...string) (content.Info, error) {
+func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldpaths ...string) (ctrcontent.Info, error) {
+	if content.remoteCache != nil {
+		sourceDesc, ok := info.Labels[nydusutils.LayerAnnotationNydusSourceDigest]
+		if ok {
+			l := ocispec.Descriptor{
+				MediaType:   nydusutils.MediaTypeNydusBlob,
+				Digest:      info.Digest,
+				Size:        info.Size,
+				Annotations: info.Labels,
+			}
+			content.remoteCache.Add(sourceDesc, l)
+			return info, nil
+		}
+	}
 	if info.Labels != nil {
 		info.Labels = nil
 	}
 	return content.store.Update(ctx, info, fieldpaths...)
 }
 
-func (content *Content) Walk(ctx context.Context, fn content.WalkFunc, filters ...string) error {
-	return content.store.Walk(ctx, fn, filters...)
+func (content *Content) Walk(ctx context.Context, fn ctrcontent.WalkFunc, fs ...string) error {
+	if content.remoteCache != nil {
+		filter, err := filters.ParseAll(fs...)
+		if err != nil {
+			return err
+		}
+		for _, layer := range content.remoteCache.Values() {
+			info := ctrcontent.Info{
+				Digest: layer.Digest,
+				Size:   layer.Size,
+				Labels: layer.Annotations,
+			}
+			if filter.Match(ctrcontent.AdaptInfo(info)) {
+				if err := fn(info); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return content.store.Walk(ctx, fn, fs...)
 }
 
 func (content *Content) Delete(ctx context.Context, dgst digest.Digest) error {
 	return content.store.Delete(ctx, dgst)
 }
 
-func (content *Content) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.ReaderAt, error) {
+func (content *Content) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (ctrcontent.ReaderAt, error) {
 	readerAt, err := content.store.ReaderAt(ctx, desc)
 	if err != nil {
+		if content.remoteCache != nil && errors.Is(err, errdefs.ErrNotFound) {
+			for _, layer := range content.remoteCache.Values() {
+				if layer.Digest == desc.Digest {
+					return remote.Fetch(ctx, content.remoteCache.cacheRef, desc, content.remoteCache.host, false)
+				}
+			}
+		}
 		return readerAt, err
 	}
 	return readerAt, content.updateLease(&desc.Digest)
 }
 
-func (content *Content) Status(ctx context.Context, ref string) (content.Status, error) {
+func (content *Content) Status(ctx context.Context, ref string) (ctrcontent.Status, error) {
 	return content.store.Status(ctx, ref)
 }
 
-func (content *Content) ListStatuses(ctx context.Context, filters ...string) ([]content.Status, error) {
+func (content *Content) ListStatuses(ctx context.Context, filters ...string) ([]ctrcontent.Status, error) {
 	return content.store.ListStatuses(ctx, filters...)
 }
 
@@ -266,18 +344,26 @@ func (content *Content) Abort(ctx context.Context, ref string) error {
 	return content.store.Abort(ctx, ref)
 }
 
-func (content *Content) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
+func (content *Content) Writer(ctx context.Context, opts ...ctrcontent.WriterOpt) (ctrcontent.Writer, error) {
 	writer, err := content.store.Writer(ctx, opts...)
 	return &localWriter{writer, content}, err
 }
 
+func (content *Content) NewRemoteCache(cacheRef string) error {
+	if content.remoteCache != nil {
+		cacheSize := content.remoteCache.cacheSize
+		return content.remoteCache.NewLRUCache(cacheSize, cacheRef)
+	}
+	return nil
+}
+
 // localWriter wrap the content.Writer
 type localWriter struct {
-	content.Writer
+	ctrcontent.Writer
 	content *Content
 }
 
-func (localWriter localWriter) Commit(ctx context.Context, size int64, expected digest.Digest, opts ...content.Opt) error {
+func (localWriter localWriter) Commit(ctx context.Context, size int64, expected digest.Digest, opts ...ctrcontent.Opt) error {
 	// we don't write any lables, drop the opts
 	localWriter.content.updateLease(&expected)
 	return localWriter.Writer.Commit(ctx, size, expected)

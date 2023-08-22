@@ -23,7 +23,9 @@ import (
 
 	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/goharbor/acceleration-service/pkg/remote"
 	lru "github.com/hashicorp/golang-lru/v2"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // This is not thread-safe, which means it will depend on the parent implementation to do the locking mechanism.
@@ -121,4 +123,62 @@ func (leaseCache *leaseCache) remove(key string, usedCount string) {
 // Len return the size of leaseCache
 func (leaseCache *leaseCache) Len() int {
 	return leaseCache.size
+}
+
+type RemoteCache struct {
+	// remoteCache is an LRU cache for caching target layer descriptors, the cache key is the source layer digest,
+	// and the cache value is the target layer descriptor after conversion.
+	remoteCache *lru.Cache[string, ocispec.Descriptor]
+	// cacheRef is the remote cache reference.
+	cacheRef string
+	// host is a func to provide registry credential by host name.
+	host remote.HostFunc
+	// cacheSize is the remote cache record capacity of converted layers.
+	cacheSize int
+}
+
+func NewRemoteCache(cacheSize int, host remote.HostFunc) (*RemoteCache, error) {
+	remoteCache, err := lru.New[string, ocispec.Descriptor](cacheSize)
+	if err != nil {
+		return nil, err
+	}
+	return &RemoteCache{
+		remoteCache: remoteCache,
+		host:        host,
+		cacheSize:   cacheSize,
+	}, nil
+}
+
+func (rc *RemoteCache) Values() []ocispec.Descriptor {
+	return rc.remoteCache.Values()
+}
+
+func (rc *RemoteCache) Get(key string) (ocispec.Descriptor, bool) {
+	return rc.remoteCache.Get(key)
+}
+
+func (rc *RemoteCache) Add(key string, value ocispec.Descriptor) {
+	rc.remoteCache.Add(key, value)
+}
+
+func (rc *RemoteCache) Remove(key string) {
+	rc.remoteCache.Remove(key)
+}
+
+// Size returns the number of items in the cache.
+func (rc *RemoteCache) Size() int {
+	return rc.remoteCache.Len()
+
+}
+
+func (rc *RemoteCache) NewLRUCache(cacheSize int, cacheRef string) error {
+	if rc != nil {
+		remoteCache, err := lru.New[string, ocispec.Descriptor](cacheSize)
+		if err != nil {
+			return err
+		}
+		rc.remoteCache = remoteCache
+		rc.cacheRef = cacheRef
+	}
+	return nil
 }

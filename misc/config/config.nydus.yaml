@@ -31,6 +31,8 @@ provider:
   gcpolicy:
       # size threshold that triggers GC, the oldest used blobs will be reclaimed if exceeds the size.
       threshold: 1000MB
+  # remote cache record capacity of converted layers, default is 200.
+  cache_size: 200
 
 converter:
   # number of worker for executing conversion task
@@ -100,3 +102,5 @@ converter:
   rules:
     # add suffix to tag of source image reference as target image reference
     - tag_suffix: -nydus
+    # add suffix to tag of source image reference as remote cache reference, leave empty to disable remote cache.
+    - cache_tag_suffix: -nydus-cache

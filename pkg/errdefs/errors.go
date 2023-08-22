@@ -17,6 +17,8 @@ var (
 	ErrConvertFailed    = errors.New("ERR_CONVERT_FAILED")
 	ErrAlreadyConverted = errors.New("ERR_ALREADY_CONVERTED")
 	ErrUnhealthy        = errors.New("ERR_UNHEALTHY")
+	ErrIsRemoteCache    = errors.New("ERR_IS_REMOTE_CACHE")
+	ErrNotSupport       = errors.New("ERR_NOT_SUPPORT")
 )
 
 // IsErrHTTPResponseToHTTPSClient returns whether err is
