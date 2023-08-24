@@ -113,9 +113,12 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 	if err = adp.content.NewRemoteCache(cacheRef); err != nil {
 		return err
 	}
+	adp.content.GcMutex.RLock()
 	if _, err = adp.cvt.Convert(ctx, source, target, cacheRef); err != nil {
+		adp.content.GcMutex.RUnlock()
 		return err
 	}
+	adp.content.GcMutex.RUnlock()
 	if err := adp.content.GC(ctx); err != nil {
 		return err
 	}

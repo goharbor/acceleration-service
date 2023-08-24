@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	ctrcontent "github.com/containerd/containerd/content"
@@ -47,6 +48,8 @@ type Content struct {
 	lm leases.Manager
 	// gcSingleflight help to resolve concurrent gc
 	gcSingleflight *singleflight.Group
+	// GcMutex works between gc and convert
+	GcMutex *sync.RWMutex
 	// lc cache the used count and reference order of lease
 	lc *leaseCache
 	// store is the local content store wrapped inner db
@@ -95,6 +98,7 @@ func NewContent(contentDir string, databaseDir string, threshold string, useRemo
 		db:             db,
 		lm:             metadata.NewLeaseManager(db),
 		gcSingleflight: &singleflight.Group{},
+		GcMutex:        &sync.RWMutex{},
 		lc:             lc,
 		store:          db.ContentStore(),
 		threshold:      int64(t),
@@ -137,6 +141,13 @@ func (content *Content) GC(ctx context.Context) error {
 	// if the local content size over eighty percent of threshold, gc start
 	if size > (content.threshold*int64(80))/100 {
 		if _, err, _ := content.gcSingleflight.Do(accelerationServiceNamespace, func() (interface{}, error) {
+			content.GcMutex.Lock()
+			defer content.GcMutex.Unlock()
+			// recalculate the local cache size
+			size, err := content.Size()
+			if err != nil {
+				return nil, err
+			}
 			return nil, content.garbageCollect(ctx, size-(content.threshold*int64(80))/100)
 		}); err != nil {
 			return err
