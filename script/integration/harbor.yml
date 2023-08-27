@@ -62,10 +62,14 @@ clair:
 jobservice:
   # Maximum number of job workers in job service
   max_job_workers: 10
+  # The jobLogger sweeper duration (ignored if `jobLogger` is `stdout`)
+  logger_sweeper_duration: 1 #days
 
 notification:
   # Maximum retry count for webhook job
   webhook_job_max_retry: 10
+  # HTTP client timeout for webhook job
+  webhook_job_http_client_timeout: 3 #seconds
 
 chart:
   # Change the value of absolute_url to enabled can enable absolute url in chart
@@ -96,7 +100,7 @@ log:
   #   port: 5140
 
 #This attribute is for migrator to detect the version of the .cfg file, DO NOT MODIFY!
-_version: 1.10.0
+_version: 2.9.0
 
 # Uncomment external_database if using external database.
 # external_database:
