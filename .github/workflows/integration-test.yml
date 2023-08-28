@@ -10,7 +10,7 @@ on:
 
 env:
   GO_VERSION: 1.18
-  HARBOR_VERSION: 2.4.1
+  HARBOR_VERSION: 2.8.4
   NYDUS_VERSION: 2.1.6
   OCI_IMAGE_NAME: wordpress
 
