@@ -102,5 +102,5 @@ converter:
   rules:
     # add suffix to tag of source image reference as target image reference
     - tag_suffix: -nydus
-    # add suffix to tag of source image reference as remote cache reference, leave empty to disable remote cache.
-    - cache_tag_suffix: -nydus-cache
+    # set tag of source image reference as remote cache reference, leave empty to disable remote cache.
+    - cache_tag: nydus-cache
