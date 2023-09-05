@@ -67,8 +67,8 @@ type SourceConfig struct {
 }
 
 type ConversionRule struct {
-	TagSuffix      string `yaml:"tag_suffix"`
-	CacheTagSuffix string `yaml:"cache_tag_suffix"`
+	TagSuffix string `yaml:"tag_suffix"`
+	CacheTag  string `yaml:"cache_tag"`
 }
 
 type ConverterConfig struct {
@@ -142,7 +142,7 @@ func (cfg *Config) Host(ref string) (remote.CredentialFunc, bool, error) {
 
 func (cfg *Config) EnableRemoteCache() bool {
 	for _, rule := range cfg.Converter.Rules {
-		if rule.CacheTagSuffix != "" {
+		if rule.CacheTag != "" {
 			return true
 		}
 	}

@@ -103,9 +103,9 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		}
 		return errors.Wrap(err, "create target reference by rule")
 	}
-	cacheRef, err := adp.rule.Map(source, CacheTagSuffix)
+	cacheRef, err := adp.rule.Map(source, CacheTag)
 	if err != nil {
-		if errors.Is(err, errdefs.ErrIsRemoteCache) {
+		if errors.Is(err, errdefs.ErrSameTag) {
 			logrus.Infof("image was remote cache: %s", source)
 			return nil
 		}
