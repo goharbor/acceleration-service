@@ -56,6 +56,9 @@ jobs:
 
   release_binary:
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
     env:
       GO_VERSION: 1.18
       OUTPUT_DIR: ${{ github.workspace }}/out
@@ -70,12 +73,12 @@ jobs:
           make check
       - name: Build Binary
         run: |
-          make
+          make -e GOARCH=${{ matrix.arch }}
       - name: Pack Binary
         run: |
           TAG=$GITHUB_REF_NAME
-          TARGZ_FILE="harbor-acceld-$TAG-linux-amd64.tgz"
-          SHA256SUM_FILE="harbor-acceld-$TAG-linux-amd64.tgz.sha256sum"
+          TARGZ_FILE="harbor-acceld-$TAG-linux-${{ matrix.arch }}.tgz"
+          SHA256SUM_FILE="harbor-acceld-$TAG-linux-${{ matrix.arch }}.tgz.sha256sum"
           mkdir $OUTPUT_DIR && mkdir harbor-acceld && mv acceld harbor-acceld/. && mv accelctl harbor-acceld/.
           tar cf - harbor-acceld | gzip > $OUTPUT_DIR/${TARGZ_FILE}
           sha256sum $OUTPUT_DIR/${TARGZ_FILE} > $OUTPUT_DIR/${SHA256SUM_FILE}
