@@ -15,7 +15,7 @@ jobs:
       GO_VERSION: 1.18
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install Golang
       uses: actions/setup-go@v4

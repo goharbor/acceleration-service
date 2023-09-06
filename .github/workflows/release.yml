@@ -12,7 +12,7 @@ jobs:
       GO_VERSION: 1.18
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Export Image Tag
       run: |
@@ -60,17 +60,10 @@ jobs:
       GO_VERSION: 1.18
       OUTPUT_DIR: ${{ github.workspace }}/out
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Cache Go Mod
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go
       - name: Run Linter
         run: |
           make install-check-tools
@@ -99,7 +92,6 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/out
     needs: [release_binary]
     steps:
-      - uses: actions/checkout@v3
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
