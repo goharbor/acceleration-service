@@ -17,6 +17,7 @@ package adapter
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/containerd/containerd/namespaces"
 	"github.com/pkg/errors"
@@ -65,6 +66,8 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "create content provider")
 	}
+	// start scheduled gc task every hour
+	go startScheduledGC(content)
 	cvt, err := converter.New(
 		converter.WithProvider(provider),
 		converter.WithDriver(cfg.Converter.Driver.Type, cfg.Converter.Driver.Config),
@@ -94,6 +97,15 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 	return handler, nil
 }
 
+func startScheduledGC(content *content.Content) {
+	ticker := time.NewTicker(time.Hour)
+	for range ticker.C {
+		if err := content.GC(namespaces.WithNamespace(context.Background(), "acceleration-service"), content.Threshold/2); err != nil {
+			logrus.Error(errors.Wrap(err, "scheduled gc task"))
+		}
+	}
+}
+
 func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 	target, err := adp.rule.Map(source, TagSuffix)
 	if err != nil {
@@ -119,7 +131,7 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		return err
 	}
 	adp.content.GcMutex.RUnlock()
-	if err := adp.content.GC(ctx); err != nil {
+	if err := adp.content.GC(ctx, adp.content.Threshold); err != nil {
 		return err
 	}
 	return nil
