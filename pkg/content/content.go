@@ -135,27 +135,29 @@ func (content *Content) Size() (int64, error) {
 }
 
 // GC clean the local caches by cfg.Provider.GCPolicy configuration
-func (content *Content) GC(ctx context.Context, threshold int64) error {
+func (content *Content) GC(ctx context.Context, threshold int64) {
 	size, err := content.Size()
 	if err != nil {
-		return err
+		logrus.Error(errors.Wrap(err, "gc get content size"))
+		return
 	}
 	// if the local content size over eighty percent of threshold, gc start
 	if size > (threshold*gcPercent)/100 {
-		if _, err, _ := content.gcSingleflight.Do(accelerationServiceNamespace, func() (interface{}, error) {
+		content.gcSingleflight.Do(accelerationServiceNamespace, func() (interface{}, error) {
 			content.GcMutex.Lock()
 			defer content.GcMutex.Unlock()
 			// recalculate the local cache size
 			size, err := content.Size()
 			if err != nil {
-				return nil, err
+				logrus.Error(errors.Wrap(err, "gc get content size"))
+				return nil, nil
 			}
-			return nil, content.garbageCollect(ctx, size-(threshold*gcPercent)/100)
-		}); err != nil {
-			return err
-		}
+			if err := content.garbageCollect(ctx, size-(threshold*gcPercent)/100); err != nil {
+				logrus.Error(errors.Wrap(err, "gc"))
+			}
+			return nil, nil
+		})
 	}
-	return nil
 }
 
 // garbageCollect clean the local caches by lease

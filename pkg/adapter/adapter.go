@@ -100,9 +100,7 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 func startScheduledGC(content *content.Content) {
 	ticker := time.NewTicker(time.Hour)
 	for range ticker.C {
-		if err := content.GC(namespaces.WithNamespace(context.Background(), "acceleration-service"), content.Threshold/2); err != nil {
-			logrus.Error(errors.Wrap(err, "scheduled gc task"))
-		}
+		content.GC(namespaces.WithNamespace(context.Background(), "acceleration-service"), content.Threshold/2)
 	}
 }
 
@@ -126,14 +124,12 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 		return err
 	}
 	adp.content.GcMutex.RLock()
+	defer adp.content.GcMutex.RUnlock()
 	if _, err = adp.cvt.Convert(ctx, source, target, cacheRef); err != nil {
 		adp.content.GcMutex.RUnlock()
 		return err
 	}
-	adp.content.GcMutex.RUnlock()
-	if err := adp.content.GC(ctx, adp.content.Threshold); err != nil {
-		return err
-	}
+	go adp.content.GC(ctx, adp.content.Threshold)
 	return nil
 }
 
