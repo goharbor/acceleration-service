@@ -12,7 +12,7 @@ jobs:
       GO_VERSION: 1.18
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Export Image Tag
       run: |
@@ -56,33 +56,29 @@ jobs:
 
   release_binary:
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
     env:
       GO_VERSION: 1.18
       OUTPUT_DIR: ${{ github.workspace }}/out
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Cache Go Mod
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go
       - name: Run Linter
         run: |
           make install-check-tools
           make check
       - name: Build Binary
         run: |
-          make
+          make -e GOARCH=${{ matrix.arch }}
       - name: Pack Binary
         run: |
           TAG=$GITHUB_REF_NAME
-          TARGZ_FILE="harbor-acceld-$TAG-linux-amd64.tgz"
-          SHA256SUM_FILE="harbor-acceld-$TAG-linux-amd64.tgz.sha256sum"
+          TARGZ_FILE="harbor-acceld-$TAG-linux-${{ matrix.arch }}.tgz"
+          SHA256SUM_FILE="harbor-acceld-$TAG-linux-${{ matrix.arch }}.tgz.sha256sum"
           mkdir $OUTPUT_DIR && mkdir harbor-acceld && mv acceld harbor-acceld/. && mv accelctl harbor-acceld/.
           tar cf - harbor-acceld | gzip > $OUTPUT_DIR/${TARGZ_FILE}
           sha256sum $OUTPUT_DIR/${TARGZ_FILE} > $OUTPUT_DIR/${SHA256SUM_FILE}
@@ -99,7 +95,6 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/out
     needs: [release_binary]
     steps:
-      - uses: actions/checkout@v3
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
