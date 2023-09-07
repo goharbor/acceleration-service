@@ -1,4 +1,4 @@
-FROM golang:1.18.7 AS build
+FROM golang:1.21.1 AS build
 
 ARG NYDUS_VERSION=v2.1.6
 
