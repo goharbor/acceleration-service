@@ -1,4 +1,6 @@
-# API
+# Development
+
+## API
 
 Acceld acts as an HTTP server to serve webhook HTTP requests
 from Harbor for image conversions, acceld exposes following APIs:
@@ -10,9 +12,9 @@ from Harbor for image conversions, acceld exposes following APIs:
 ---
 <a name="create-task"></a>
 
-## Create Task
+### Create Task
 
-### Request
+#### Request
 
 ```
 POST /api/v1/conversions?sync=$sync
@@ -31,7 +33,7 @@ POST /api/v1/conversions?sync=$sync
 
 `$sync`: boolean, `true` enable waiting for api to respond until the conversion task is completed.
 
-### Response
+#### Response
 
 ```
 Ok
@@ -45,15 +47,15 @@ Ok
 
 <a name="list-task"></a>
 
-## List Task
+### List Task
 
-### Request
+#### Request
 
 ```
 GET /api/v1/conversions
 ```
 
-### Response
+#### Response
 
 ```
 [
@@ -79,15 +81,15 @@ GET /api/v1/conversions
 
 <a name="check-healthy"></a>
 
-## Check Healthy
+### Check Healthy
 
-### Request
+#### Request
 
 ```
 GET /api/v1/health
 ```
 
-### Response
+#### Response
 
 ```
 Ok
@@ -97,3 +99,35 @@ Ok
 | ------ | --------------------------- |
 | 200    | Accled service is healthy   |
 | 500    | Accled service is unhealthy |
+
+## Driver
+
+### Interface
+
+Acceleration Service Framework provides a built-in extensible method called driver, which allows the integration of various types of accelerated image format conversions, the framework will automatically handle operations such as pulling source image and pushing converted image, the format providers need to implement the following interface in [pkg/driver](./pkg/driver):
+
+```golang
+// Driver defines image conversion interface, the following
+// methods need to be implemented by image format providers.
+type Driver interface {
+	// Convert converts the source image to target image, where
+	// content parameter provides necessary image utils, image
+	// content store and so on, where source parameter is the
+	// original image reference. If conversion successful, the
+	// converted image manifest will be returned, otherwise a
+	// non-nil error will be returned.
+	Convert(ctx context.Context, content content.Provider, source string) (*ocispec.Descriptor, error)
+
+	// Name gets the driver type name, it is used to identify
+	// different accelerated image formats.
+	Name() string
+
+	// Version gets the driver version, it is used to identify
+	// different accelerated image format versions with same driver.
+	Version() string
+}
+```
+
+### Testing
+
+We can specify the driver name by modifying `converter.driver` in the configuration file, and modify the fields in `converter.config` to specify the driver-related configuration, see [example configuration file](./misc/config/config.estargz.yaml).
