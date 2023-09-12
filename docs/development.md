@@ -104,7 +104,7 @@ Ok
 
 ### Interface
 
-Acceleration Service Framework provides a built-in extensible method called driver, which allows the integration of various types of accelerated image format conversions, the framework will automatically handle operations such as pulling source image and pushing converted image, the format providers need to implement the following interface in [pkg/driver](./pkg/driver):
+Acceleration Service Framework provides a built-in extensible method called driver, which allows the integration of various types of accelerated image format conversions, the framework will automatically handle operations such as pulling source image and pushing converted image, the format providers need to implement the following interface in [pkg/driver](../pkg/driver):
 
 ```golang
 // Driver defines image conversion interface, the following
@@ -130,4 +130,4 @@ type Driver interface {
 
 ### Testing
 
-We can specify the driver name by modifying `converter.driver` in the configuration file, and modify the fields in `converter.config` to specify the driver-related configuration, see [example configuration file](./misc/config/config.estargz.yaml).
+We can specify the driver name by modifying `converter.driver` in the configuration file, and modify the fields in `converter.config` to specify the driver-related configuration, see [example configuration file](../misc/config/config.estargz.yaml).
