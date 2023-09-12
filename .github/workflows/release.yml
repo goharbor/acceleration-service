@@ -95,6 +95,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/out
     needs: [release_binary]
     steps:
+      - uses: actions/checkout@v4
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
