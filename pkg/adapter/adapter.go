@@ -126,6 +126,12 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
 	adp.content.GcMutex.RLock()
 	defer adp.content.GcMutex.RUnlock()
 	if _, err = adp.cvt.Convert(ctx, source, target, cacheRef); err != nil {
+		if errdefs.NeedsRetryWithoutCache(err) && cacheRef != "" {
+			logrus.Infof("inconsistent layer format with the cache, retry conversion without cache: %s", cacheRef)
+			if _, err := adp.cvt.Convert(ctx, source, target, ""); err != nil {
+				return err
+			}
+		}
 		adp.content.GcMutex.RUnlock()
 		return err
 	}

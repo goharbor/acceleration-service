@@ -8,6 +8,7 @@ package errdefs
 
 import (
 	"errors"
+	"os/exec"
 	"strings"
 )
 
@@ -39,4 +40,16 @@ func isErrConnectionRefused(err error) bool {
 
 func NeedsRetryWithHTTP(err error) bool {
 	return err != nil && (isErrHTTPResponseToHTTPSClient(err) || isErrConnectionRefused(err))
+}
+
+func isErrInconsistentNydusLayer(err error) bool {
+	var exiterr *exec.ExitError
+	if errors.As(err, &exiterr) && exiterr.ExitCode() == 2 {
+		return true
+	}
+	return false
+}
+
+func NeedsRetryWithoutCache(err error) bool {
+	return err != nil && (isErrInconsistentNydusLayer(err))
 }
