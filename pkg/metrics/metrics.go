@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/goharbor/acceleration-service/pkg/converter"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -75,14 +76,14 @@ func NewOpWrapper(scope string, labelNames []string) *OpWrapper {
 	}
 }
 
-func (metrics *OpWrapper) OpWrap(op func() error, lvs ...string) error {
+func (metrics *OpWrapper) OpWrap(op func() (*converter.Metric, error), lvs ...string) (*converter.Metric, error) {
 	start := time.Now()
 
-	err := op()
+	metric, err := op()
 	Duration(err, metrics.OpDuration, start, lvs...)
 	CountInc(err, metrics.OpTotal, metrics.OpErrorTotal, lvs...)
 
-	return err
+	return metric, err
 }
 
 func Duration(err error, metric *prometheus.HistogramVec, start time.Time, lvs ...string) {
