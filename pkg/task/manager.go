@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goharbor/acceleration-service/pkg/converter"
 	"github.com/google/uuid"
 )
 
@@ -29,12 +30,14 @@ const StatusCompleted = "COMPLETED"
 const StatusFailed = "FAILED"
 
 type Task struct {
-	ID       string     `json:"id"`
-	Created  time.Time  `json:"created"`
-	Finished *time.Time `json:"finished"`
-	Source   string     `json:"source"`
-	Status   string     `json:"status"`
-	Reason   string     `json:"reason"`
+	ID         string     `json:"id"`
+	Created    time.Time  `json:"created"`
+	Finished   *time.Time `json:"finished"`
+	Source     string     `json:"source"`
+	SourceSize uint       `json:"source_size"`
+	TargetSize uint       `json:"target_size"`
+	Status     string     `json:"status"`
+	Reason     string     `json:"reason"`
 }
 
 type manager struct {
@@ -66,18 +69,20 @@ func (m *manager) Create(source string) string {
 	id := uuid.NewString()
 
 	m.tasks[id] = &Task{
-		ID:       id,
-		Created:  time.Now(),
-		Finished: nil,
-		Source:   source,
-		Status:   StatusProcessing,
-		Reason:   "",
+		ID:         id,
+		Created:    time.Now(),
+		Finished:   nil,
+		Source:     source,
+		SourceSize: 0,
+		TargetSize: 0,
+		Status:     StatusProcessing,
+		Reason:     "",
 	}
 
 	return id
 }
 
-func (m *manager) Finish(id string, err error) {
+func (m *manager) Finish(id string, metric *converter.Metric, err error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -88,6 +93,8 @@ func (m *manager) Finish(id string, err error) {
 			task.Status = StatusFailed
 			task.Reason = err.Error()
 		} else {
+			task.SourceSize = uint(metric.SourceImageSize)
+			task.TargetSize = uint(metric.TargetImageSize)
 			task.Status = StatusCompleted
 		}
 		now := time.Now()

@@ -64,11 +64,16 @@ GET /api/v1/conversions
         "created": "2022-04-06T06:45:11.83226503Z",
         "finished": "2022-04-06T06:45:11.948393604Z",
         "source": "192.168.1.1/library/nginx:latest",
+        "source_size": "70254592",
+        "target_size": "72351744",
         "status": "$status",
         "reason": "$reason"
     }
 ]
 ```
+`source_size`: uint, total size of the source image with specified platforms in bytes.
+
+`target_size`: uint, total size of the target image with specified platforms in bytes.
 
 `$status`: string, possible values is `PROCESSING`, `COMPLETED`, `FAILED`.
 

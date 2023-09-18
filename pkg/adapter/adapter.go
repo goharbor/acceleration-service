@@ -104,39 +104,40 @@ func startScheduledGC(content *content.Content) {
 	}
 }
 
-func (adp *LocalAdapter) Convert(ctx context.Context, source string) error {
+func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter.Metric, error) {
 	target, err := adp.rule.Map(source, TagSuffix)
 	if err != nil {
 		if errors.Is(err, errdefs.ErrAlreadyConverted) {
 			logrus.Infof("image has been converted: %s", source)
-			return nil
+			return nil, nil
 		}
-		return errors.Wrap(err, "create target reference by rule")
+		return nil, errors.Wrap(err, "create target reference by rule")
 	}
 	cacheRef, err := adp.rule.Map(source, CacheTag)
 	if err != nil {
 		if errors.Is(err, errdefs.ErrSameTag) {
 			logrus.Infof("image was remote cache: %s", source)
-			return nil
+			return nil, nil
 		}
 	}
 	if err = adp.content.NewRemoteCache(cacheRef); err != nil {
-		return err
+		return nil, err
 	}
 	adp.content.GcMutex.RLock()
 	defer adp.content.GcMutex.RUnlock()
-	if _, err = adp.cvt.Convert(ctx, source, target, cacheRef); err != nil {
+	metric, err := adp.cvt.Convert(ctx, source, target, cacheRef)
+	if err != nil {
 		if errdefs.NeedsRetryWithoutCache(err) && cacheRef != "" {
 			logrus.Infof("inconsistent layer format with the cache, retry conversion without cache: %s", cacheRef)
 			if _, err := adp.cvt.Convert(ctx, source, target, ""); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		adp.content.GcMutex.RUnlock()
-		return err
+		return nil, err
 	}
 	go adp.content.GC(ctx, adp.content.Threshold)
-	return nil
+	return metric, nil
 }
 
 func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) error {
@@ -145,21 +146,24 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 	if sync {
 		// FIXME: The synchronous conversion task should also be
 		// executed in a limited worker queue.
-		return metrics.Conversion.OpWrap(func() error {
-			err := adp.Convert(namespaces.WithNamespace(ctx, "acceleration-service"), ref)
-			task.Manager.Finish(taskID, err)
-			return err
+		_, err := metrics.Conversion.OpWrap(func() (*converter.Metric, error) {
+			metric, err := adp.Convert(namespaces.WithNamespace(ctx, "acceleration-service"), ref)
+			task.Manager.Finish(taskID, metric, err)
+			return nil, err
 		}, "convert")
+		return err
 	}
 
 	adp.worker.Dispatch(func() error {
 		// If the ref is same, we only convert once in the same time.
-		_, err, _ := dispatchSingleflight.Do(ref, func() (interface{}, error) {
-			return nil, metrics.Conversion.OpWrap(func() error {
-				return adp.Convert(namespaces.WithNamespace(context.Background(), "acceleration-service"), ref)
+		metric, err, _ := dispatchSingleflight.Do(ref, func() (interface{}, error) {
+			metric, err := metrics.Conversion.OpWrap(func() (*converter.Metric, error) {
+				metric, err := adp.Convert(namespaces.WithNamespace(context.Background(), "acceleration-service"), ref)
+				return metric, err
 			}, "convert")
+			return metric, err
 		})
-		task.Manager.Finish(taskID, err)
+		task.Manager.Finish(taskID, metric.(*converter.Metric), err)
 		return err
 	})
 
