@@ -93,9 +93,11 @@ func (m *manager) Finish(id string, metric *converter.Metric, err error) {
 			task.Status = StatusFailed
 			task.Reason = err.Error()
 		} else {
+			task.Status = StatusCompleted
+		}
+		if metric != nil {
 			task.SourceSize = uint(metric.SourceImageSize)
 			task.TargetSize = uint(metric.TargetImageSize)
-			task.Status = StatusCompleted
 		}
 		now := time.Now()
 		task.Finished = &now
