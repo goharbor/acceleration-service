@@ -12,7 +12,7 @@ env:
   GO_VERSION: 1.18
   HARBOR_VERSION: 2.8.4
   NYDUS_VERSION: 2.1.6
-  OCI_IMAGE_NAME: wordpress
+  OCI_IMAGE_NAME: redis
 
 jobs:
   accel_check:
