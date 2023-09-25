@@ -77,6 +77,10 @@ func NewLocalAdapter(cfg *config.Config) (*LocalAdapter, error) {
 		return nil, err
 	}
 
+	if err := task.Manager.Init(cfg.Provider.WorkDir); err != nil {
+		return nil, errors.Wrap(err, "task manager init")
+	}
+
 	worker, err := NewWorker(cfg.Converter.Worker)
 	if err != nil {
 		return nil, errors.Wrap(err, "create worker")
@@ -140,8 +144,10 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter
 }
 
 func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) error {
-	taskID := task.Manager.Create(ref)
-
+	taskID, err := task.Manager.Create(ref)
+	if err != nil {
+		return err
+	}
 	if sync {
 		// FIXME: The synchronous conversion task should also be
 		// executed in a limited worker queue.
