@@ -133,7 +133,6 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter
 				return nil, err
 			}
 		}
-		adp.content.GcMutex.RUnlock()
 		return nil, err
 	}
 	go adp.content.GC(ctx, adp.content.Threshold)
