@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
+	"github.com/docker/cli/cli/config"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
@@ -105,11 +107,18 @@ func (cfg *Config) Host(ref string) (remote.CredentialFunc, bool, error) {
 			return nil, errors.Wrap(err, "parse reference of source image")
 		}
 
-		auth, ok := cfg.Provider.Source[refURL.Host]
-		if !ok {
-			return nil, fmt.Errorf("not found matched hostname %s in config", refURL.Host)
+		auth := cfg.Provider.Source[refURL.Host]
+		// try to finds auth for a given host in docker's config.json settings.
+		if len(auth.Auth) == 0 {
+			config := config.LoadDefaultConfigFile(os.Stderr)
+			authConfig, err := config.GetAuthConfig(refURL.Host)
+			if err != nil {
+				return nil, err
+			}
+			if len(authConfig.Username) != 0 || len(authConfig.Password) != 0 {
+				auth.Auth = base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", authConfig.Username, authConfig.Password)))
+			}
 		}
-
 		return &auth, nil
 	}
 

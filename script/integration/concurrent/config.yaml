@@ -9,7 +9,8 @@ metric:
 provider:
   source:
     localhost:
-      auth: YWRtaW46SGFyYm9yMTIzNDU=
+      # If auth is not provided, it will attempt to read from docker config
+      # auth: YWRtaW46SGFyYm9yMTIzNDU=
   work_dir: /tmp
   gcpolicy:
       threshold: 10MB
