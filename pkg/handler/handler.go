@@ -63,10 +63,7 @@ func NewLocalHandler(cfg *config.Config) (*LocalHandler, error) {
 
 func (handler *LocalHandler) Auth(ctx context.Context, host string, authHeader string) error {
 	if authHeader != "" {
-		source, ok := handler.cfg.Provider.Source[host]
-		if !ok {
-			return fmt.Errorf("not found config for host %s", host)
-		}
+		source := handler.cfg.Provider.Source[host]
 		if authHeader != source.Webhook.AuthHeader {
 			return fmt.Errorf("unmatched auth header for host %s", host)
 		}

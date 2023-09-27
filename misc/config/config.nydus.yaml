@@ -18,14 +18,15 @@ provider:
     hub.harbor.com:
       # base64 encoded `<robot-name>:<robot-secret>` for robot
       # account created in harbor
-      auth: YTpiCg==
+      # auth: YTpiCg==
       # skip verifying server certs for HTTPS source registry
       insecure: false
       webhook:
         # webhook request auth header configured in harbor
         auth_header: header
     localhost:
-      auth: YWRtaW46SGFyYm9yMTIzNDU=
+      # If auth is not provided, it will attempt to read from docker config
+      # auth: YWRtaW46SGFyYm9yMTIzNDU=
   # work directory of acceld
   work_dir: /tmp
   gcpolicy:
