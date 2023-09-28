@@ -123,6 +123,7 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter
 			logrus.Infof("image was remote cache: %s", source)
 			return nil, nil
 		}
+		return nil, errors.Wrap(err, "create cache reference by rule")
 	}
 	if err = adp.content.NewRemoteCache(cacheRef); err != nil {
 		return nil, err
