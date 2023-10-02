@@ -17,7 +17,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0-rc4
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.16.0
+	github.com/prometheus/client_golang v1.17.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.3
 	github.com/urfave/cli/v2 v2.25.7
@@ -86,9 +86,9 @@ require (
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.3.0 // indirect
-	github.com/prometheus/common v0.42.0 // indirect
-	github.com/prometheus/procfs v0.10.1 // indirect
+	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
+	github.com/prometheus/common v0.44.0 // indirect
+	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/stefanberger/go-pkcs11uri v0.0.0-20201008174630-78d3cae3a980 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -109,6 +109,6 @@ require (
 	golang.org/x/tools v0.7.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	google.golang.org/grpc v1.55.0 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
