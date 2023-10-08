@@ -38,7 +38,7 @@ type LocalProvider struct {
 	content      *Content
 	hosts        remote.HostFunc
 	platformMC   platforms.MatchComparer
-	cacheRef     string
+	cacheSize    int
 }
 
 func NewLocalProvider(cfg *config.Config, platformMC platforms.MatchComparer) (Provider, *Content, error) {
@@ -46,9 +46,7 @@ func NewLocalProvider(cfg *config.Config, platformMC platforms.MatchComparer) (P
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider work directory")
 	}
-	content, err := NewContent(contentDir, cfg.Provider.WorkDir, cfg.Provider.GCPolicy.Threshold,
-		cfg.EnableRemoteCache(), cfg.Provider.CacheSize, cfg.Host)
-
+	content, err := NewContent(contentDir, cfg.Provider.WorkDir, cfg.Provider.GCPolicy.Threshold)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider content")
 	}
@@ -57,6 +55,7 @@ func NewLocalProvider(cfg *config.Config, platformMC platforms.MatchComparer) (P
 		images:     make(map[string]*ocispec.Descriptor),
 		hosts:      cfg.Host,
 		platformMC: platformMC,
+		cacheSize:  cfg.Provider.CacheSize,
 	}, content, nil
 }
 
@@ -130,14 +129,11 @@ func (pvd *LocalProvider) getImage(ref string) (*ocispec.Descriptor, error) {
 	return nil, errdefs.ErrNotFound
 }
 
-func (pvd *LocalProvider) SetCacheRef(ref string) {
-	pvd.mutex.Lock()
-	defer pvd.mutex.Unlock()
-	pvd.cacheRef = ref
-}
-
-func (pvd *LocalProvider) GetCacheRef() string {
-	pvd.mutex.Lock()
-	defer pvd.mutex.Unlock()
-	return pvd.cacheRef
+func (pvd *LocalProvider) NewRemoteCache(cacheRef string) (*RemoteCache, bool) {
+	if cacheRef != "" {
+		if cache, err := NewRemoteCache(pvd.cacheSize, cacheRef, pvd.hosts); err == nil {
+			return cache, true
+		}
+	}
+	return nil, false
 }

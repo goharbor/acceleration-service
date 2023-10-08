@@ -44,7 +44,7 @@ func TestLeaseCache(t *testing.T) {
 func TestLeaseCacheInit(t *testing.T) {
 	os.MkdirAll("./tmp", 0755)
 	defer os.RemoveAll("./tmp")
-	content, err := NewContent("./tmp", "./tmp", "100MB", false, 200, nil)
+	content, err := NewContent("./tmp", "./tmp", "100MB")
 	require.NoError(t, err)
 	testDigest := []string{
 		"sha256:9bb13890319dc01e5f8a4d3d0c4c72685654d682d568350fd38a02b1d70aee6b",

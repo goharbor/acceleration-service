@@ -120,9 +120,16 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 	}
 	logger.Infof("pulled image %s, elapse %s", source, metric.SourcePullElapsed)
 
+	cache, useRemoteCache := cvt.provider.NewRemoteCache(cacheRef)
+	if useRemoteCache {
+		if _, err := cache.Fetch(ctx, cvt.provider, cvt.platformMC); err != nil {
+			return nil, errors.Wrap(err, "fetch remote cache")
+		}
+		ctx = context.WithValue(ctx, content.Cache, cache)
+	}
+
 	logger.Infof("converting image %s", source)
 	start = time.Now()
-	cvt.provider.SetCacheRef(cacheRef)
 	desc, err := cvt.driver.Convert(ctx, cvt.provider, source)
 	if err != nil {
 		return nil, errors.Wrap(err, "convert image")
@@ -136,6 +143,15 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 		return nil, errors.Wrap(err, "get target image size")
 	}
 	logger.Infof("converted image %s, elapse %s", target, metric.ConversionElapsed)
+	if useRemoteCache {
+		sourceImage, err := cvt.provider.Image(ctx, source)
+		if err != nil {
+			return nil, errors.Wrap(err, "get source image")
+		}
+		if err = cache.UpdateAndPush(ctx, cvt.provider, sourceImage, desc, cvt.platformMC); err != nil {
+			return nil, errors.Wrap(err, "update and push remote cache")
+		}
+	}
 
 	start = time.Now()
 	logger.Infof("pushing image %s", target)

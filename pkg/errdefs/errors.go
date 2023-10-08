@@ -19,7 +19,6 @@ var (
 	ErrAlreadyConverted = errors.New("ERR_ALREADY_CONVERTED")
 	ErrUnhealthy        = errors.New("ERR_UNHEALTHY")
 	ErrSameTag          = errors.New("ERR_SAME_TAG")
-	ErrNotSupport       = errors.New("ERR_NOT_SUPPORT")
 )
 
 // IsErrHTTPResponseToHTTPSClient returns whether err is
