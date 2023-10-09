@@ -278,7 +278,7 @@ func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldp
 	// containerd content store write labels to annotate some blobs belong to a same repo,
 	// cleaning labels is needed by GC
 	if info.Labels != nil {
-		info.Labels = nil
+		// info.Labels = nil
 	}
 	return content.store.Update(ctx, info, fieldpaths...)
 }

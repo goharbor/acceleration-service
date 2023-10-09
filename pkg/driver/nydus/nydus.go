@@ -178,6 +178,9 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid oci_ref option")
 	}
+	if ociRef && !docker2oci {
+		docker2oci = true
+	}
 
 	withReferrer, err := parseBool(cfg["with_referrer"])
 	if err != nil {
