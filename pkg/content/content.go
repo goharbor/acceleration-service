@@ -25,6 +25,7 @@ import (
 	ctrcontent "github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/metadata/boltutil"
@@ -253,6 +254,10 @@ func (content *Content) Info(ctx context.Context, dgst digest.Digest) (ctrconten
 				layers := remoteCache.Values()
 				for _, layer := range layers {
 					if layer.Digest == dgst {
+						if layer.Annotations == nil {
+							layer.Annotations = map[string]string{}
+						}
+						layer.Annotations[labels.LabelUncompressed] = layer.Digest.String()
 						return ctrcontent.Info{
 							Digest: layer.Digest,
 							Size:   layer.Size,
