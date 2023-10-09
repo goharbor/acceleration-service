@@ -42,8 +42,6 @@ type Provider interface {
 	Image(ctx context.Context, ref string) (*ocispec.Descriptor, error)
 	// ContentStore gets the content store object of containerd.
 	ContentStore() content.Store
-	// SetCacheRef sets the cache reference of the source image.
-	SetCacheRef(ref string)
-	// GetCacheRef gets the cache reference of the source image.
-	GetCacheRef() string
+	// RemoteCache gets the remote cache of the source reference.
+	NewRemoteCache(ref string) (*RemoteCache, bool)
 }

@@ -125,9 +125,6 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter
 		}
 		return nil, errors.Wrap(err, "create cache reference by rule")
 	}
-	if err = adp.content.NewRemoteCache(cacheRef); err != nil {
-		return nil, err
-	}
 	adp.content.GcMutex.RLock()
 	defer adp.content.GcMutex.RUnlock()
 	metric, err := adp.cvt.Convert(ctx, source, target, cacheRef)
