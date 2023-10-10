@@ -1,0 +1,30 @@
+server:
+  name: API
+  host: 0.0.0.0
+  port: 2077
+
+metric:
+  enabled: true
+
+provider:
+  source:
+    0.0.0.0:
+      auth: YWRtaW46SGFyYm9yMTIzNDU=
+      insecure: true
+      webhook:
+        auth_header: acceleration-service
+  work_dir: /tmp
+  gcpolicy:
+      threshold: 10MB
+
+converter:
+  worker: 5
+  harbor_annotation: true
+  driver:
+    type: nydus
+    config:
+      work_dir: /tmp
+      with_referrer: true
+
+  rules:
+    - tag_suffix: -nydus
