@@ -190,9 +190,16 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		encryptRecipients = strings.Split(cfg["encrypt_recipients"], ",")
 	}
 
-	if ociRef && fsVersion != "6" {
-		logrus.Warn("forcibly using fs version 6 when oci_ref option enabled")
-		fsVersion = "6"
+	if ociRef {
+		if fsVersion != "6" {
+			logrus.Warn("forcibly using fs version 6 when oci_ref option enabled")
+			fsVersion = "6"
+		}
+		if !docker2oci {
+			// For nydus zran image, since its manifest requires the use
+			// of annotations, we only support OCI-formatted manifest.
+			docker2oci = true
+		}
 	}
 
 	return &Driver{
