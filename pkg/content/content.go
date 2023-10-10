@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -281,9 +282,11 @@ func (content *Content) Info(ctx context.Context, dgst digest.Digest) (ctrconten
 
 func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldpaths ...string) (ctrcontent.Info, error) {
 	// containerd content store write labels to annotate some blobs belong to a same repo,
-	// cleaning labels is needed by GC
-	if info.Labels != nil {
-		info.Labels = nil
+	// cleaning gc related labels
+	for k := range info.Labels {
+		if strings.HasPrefix(k, "containerd.io/gc") {
+			delete(info.Labels, k)
+		}
 	}
 	return content.store.Update(ctx, info, fieldpaths...)
 }
