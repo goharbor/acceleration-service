@@ -33,6 +33,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/nydus-snapshotter/pkg/backend"
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
+	encryption "github.com/containerd/nydus-snapshotter/pkg/encryption"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
 	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
@@ -263,17 +264,24 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		BatchSize:        d.batchSize,
 		Encrypt:          len(d.encryptRecipients) != 0,
 	}
+
+	var encrypter nydusify.Encrypter
+	if len(d.encryptRecipients) > 0 {
+		encrypter = func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (ocispec.Descriptor, error) {
+			return encryption.EncryptNydusBootstrap(ctx, cs, desc, d.encryptRecipients)
+		}
+	}
 	mergeOpt := nydusify.MergeOption{
-		WorkDir:           packOpt.WorkDir,
-		BuilderPath:       packOpt.BuilderPath,
-		FsVersion:         packOpt.FsVersion,
-		ChunkDictPath:     packOpt.ChunkDictPath,
-		PrefetchPatterns:  packOpt.PrefetchPatterns,
-		Backend:           packOpt.Backend,
-		OCI:               d.docker2oci,
-		OCIRef:            packOpt.OCIRef,
-		EncryptRecipients: d.encryptRecipients,
-		WithReferrer:      d.withReferrer,
+		WorkDir:          packOpt.WorkDir,
+		BuilderPath:      packOpt.BuilderPath,
+		FsVersion:        packOpt.FsVersion,
+		ChunkDictPath:    packOpt.ChunkDictPath,
+		PrefetchPatterns: packOpt.PrefetchPatterns,
+		Backend:          packOpt.Backend,
+		OCI:              d.docker2oci,
+		OCIRef:           packOpt.OCIRef,
+		Encrypt:          encrypter,
+		WithReferrer:     d.withReferrer,
 	}
 	convertHookFunc := func(
 		ctx context.Context, cs content.Store, orgDesc ocispec.Descriptor, newDesc *ocispec.Descriptor,
