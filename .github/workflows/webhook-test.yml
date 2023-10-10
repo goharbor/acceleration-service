@@ -1,0 +1,45 @@
+name: Webhook Test
+
+on:
+  push:
+    branches: [ '*' ]
+    paths-ignore: [ '**.md']
+  pull_request:
+    branches: [ main ]
+    paths-ignore: [ '**.md']
+
+env:
+  GO_VERSION: 1.18
+  HARBOR_VERSION: 2.8.4
+  NYDUS_VERSION: 2.2.3
+
+jobs:
+  webhook_test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Golang
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Build Accel
+      run: |
+        make
+
+    - name: Install Harbor
+      run: |
+        wget https://github.com/goharbor/harbor/releases/download/v${{ env.HARBOR_VERSION }}/harbor-offline-installer-v${{ env.HARBOR_VERSION }}.tgz
+        tar xzvf harbor-offline-installer-v${{ env.HARBOR_VERSION }}.tgz
+        cp ./script/integration/harbor.yml harbor/harbor.yml
+        cd harbor
+        sudo ./install.sh
+
+    - name: Webhook Test
+      run: |
+        # Download nydus components
+        wget https://github.com/dragonflyoss/image-service/releases/download/v${{ env.NYDUS_VERSION }}/nydus-static-v${{ env.NYDUS_VERSION }}-linux-amd64.tgz
+        sudo tar xzvf nydus-static-v${{ env.NYDUS_VERSION }}-linux-amd64.tgz --wildcards --strip-components=1 -C /usr/bin/ nydus-static/*
+        sudo ./script/integration/webhook/test.sh
