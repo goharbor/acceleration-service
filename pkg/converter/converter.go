@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	ctrErrdefs "github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/reference/docker"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
@@ -101,6 +102,29 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 	source = sourceNamed.String()
 	target = targetNamed.String()
 
+	ctx, cache := cvt.provider.NewRemoteCache(ctx, cacheRef)
+	if cache != nil {
+		logger.Infof("pulling cache %s", cacheRef)
+		cacheManifest, err := cache.Fetch(ctx, cvt.provider, cvt.platformMC)
+		if err != nil {
+			if errdefs.NeedsRetryWithHTTP(err) {
+				logger.Infof("try to pull cache with plain HTTP for %s", cacheRef)
+				cvt.provider.UsePlainHTTP()
+				cacheManifest, err = cache.Fetch(ctx, cvt.provider, cvt.platformMC)
+			}
+			if err != nil {
+				if errors.Is(err, ctrErrdefs.ErrNotFound) {
+					logger.Infof("cache %s not found", cacheRef)
+				} else {
+					logger.Warnf(errors.Wrapf(err, "failed to pull cache %s", cacheRef).Error())
+				}
+			}
+		}
+		if cacheManifest != nil {
+			logger.Infof("pulled cache %s", cacheRef)
+		}
+	}
+
 	logger.Infof("pulling image %s", source)
 	start := time.Now()
 	if err := cvt.pull(ctx, source); err != nil {
@@ -120,14 +144,6 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 	}
 	logger.Infof("pulled image %s, elapse %s", source, metric.SourcePullElapsed)
 
-	cache, useRemoteCache := cvt.provider.NewRemoteCache(cacheRef)
-	if useRemoteCache {
-		if _, err := cache.Fetch(ctx, cvt.provider, cvt.platformMC); err != nil {
-			return nil, errors.Wrap(err, "fetch remote cache")
-		}
-		ctx = context.WithValue(ctx, content.Cache, cache)
-	}
-
 	logger.Infof("converting image %s", source)
 	start = time.Now()
 	desc, err := cvt.driver.Convert(ctx, cvt.provider, source)
@@ -143,14 +159,17 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 		return nil, errors.Wrap(err, "get target image size")
 	}
 	logger.Infof("converted image %s, elapse %s", target, metric.ConversionElapsed)
-	if useRemoteCache {
+
+	if cache != nil {
 		sourceImage, err := cvt.provider.Image(ctx, source)
 		if err != nil {
 			return nil, errors.Wrap(err, "get source image")
 		}
+		logger.Infof("pushing cache %s", cacheRef)
 		if err = cache.UpdateAndPush(ctx, cvt.provider, sourceImage, desc, cvt.platformMC); err != nil {
-			return nil, errors.Wrap(err, "update and push remote cache")
+			return nil, errors.Wrap(err, "update and push cache")
 		}
+		logger.Infof("pushed cache %s", cacheRef)
 	}
 
 	start = time.Now()

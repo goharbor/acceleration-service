@@ -114,6 +114,13 @@ func (pvd *LocalProvider) ContentStore() content.Store {
 	return pvd.content
 }
 
+func (pvd *LocalProvider) NewRemoteCache(ctx context.Context, cacheRef string) (context.Context, *RemoteCache) {
+	if cacheRef != "" {
+		return NewRemoteCache(ctx, pvd.cacheSize, cacheRef, pvd.hosts)
+	}
+	return ctx, nil
+}
+
 func (pvd *LocalProvider) setImage(ref string, image *ocispec.Descriptor) {
 	pvd.mutex.Lock()
 	defer pvd.mutex.Unlock()
@@ -127,13 +134,4 @@ func (pvd *LocalProvider) getImage(ref string) (*ocispec.Descriptor, error) {
 		return desc, nil
 	}
 	return nil, errdefs.ErrNotFound
-}
-
-func (pvd *LocalProvider) NewRemoteCache(cacheRef string) (*RemoteCache, bool) {
-	if cacheRef != "" {
-		if cache, err := NewRemoteCache(pvd.cacheSize, cacheRef, pvd.hosts); err == nil {
-			return cache, true
-		}
-	}
-	return nil, false
 }

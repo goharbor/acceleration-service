@@ -25,9 +25,6 @@ const (
 	LayerAnnotationNydusBlobIDs         = "containerd.io/snapshot/nydus-blob-ids"
 	LayerAnnotationNydusBootstrapDigest = "containerd.io/snapshot/nydus-bootstrap-digest"
 	LayerAnnotationNydusFsVersion       = "containerd.io/snapshot/nydus-fs-version"
-	LayerAnnotationUncompressed         = "containerd.io/uncompressed"
-	LayerAnnotationNydusSourceDigest    = "containerd.io/snapshot/nydus-source-digest"
-	LayerAnnotationNydusTargetDigest    = "containerd.io/snapshot/nydus-target-digest"
 )
 
 var NydusAnnotations = []string{LayerAnnotationNydusBlob, LayerAnnotationNydusBootstrap, LayerAnnotationNydusRAFSVersion}

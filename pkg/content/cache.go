@@ -18,141 +18,40 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
-	"sort"
-	"strconv"
 	"sync"
 
 	"bytes"
 	"encoding/json"
 
-	"github.com/containerd/containerd/leases"
-	"github.com/containerd/containerd/namespaces"
+	ctrErrdefs "github.com/containerd/containerd/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/remote"
-	lru "github.com/hashicorp/golang-lru/v2"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
-	containerdErrDefs "github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/containerd/remotes"
+	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
-	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/utils"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	"github.com/pkg/errors"
 )
 
-// This is not thread-safe, which means it will depend on the parent implementation to do the locking mechanism.
-type leaseCache struct {
-	caches      map[string]*lru.Cache[string, any]
-	cachesIndex []int
-	size        int
+type cacheKey struct{}
+
+type CacheItem struct {
+	Source ocispec.Descriptor
+	Target ocispec.Descriptor
 }
-
-// newleaseCache return new empty leaseCache
-func newLeaseCache() *leaseCache {
-	return &leaseCache{
-		caches:      make(map[string]*lru.Cache[string, any]),
-		cachesIndex: make([]int, 0),
-		size:        0,
-	}
-}
-
-// Init leaseCache by leases manager from db
-func (leaseCache *leaseCache) Init(lm leases.Manager) error {
-	ls, err := lm.List(namespaces.WithNamespace(context.Background(), accelerationServiceNamespace))
-	if err != nil {
-		return err
-	}
-	sort.Slice(ls, func(i, j int) bool {
-		return ls[i].Labels[usedAtLabel] > ls[j].Labels[usedAtLabel]
-	})
-	for _, lease := range ls {
-		if err := leaseCache.Add(lease.ID, lease.Labels[usedCountLabel]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Add the key into cache
-func (leaseCache *leaseCache) Add(key string, usedCount string) error {
-	count, err := strconv.Atoi(usedCount)
-	if err != nil {
-		return err
-	}
-	if cache, ok := leaseCache.caches[usedCount]; ok {
-		cache.Add(key, nil)
-	} else {
-		cache, err := lru.New[string, any](math.MaxInt)
-		if err != nil {
-			return err
-		}
-		cache.Add(key, nil)
-		leaseCache.caches[usedCount] = cache
-		usedCount, err := strconv.Atoi(usedCount)
-		if err != nil {
-			return err
-		}
-		leaseCache.cachesIndex = append(leaseCache.cachesIndex, usedCount)
-		sort.Ints(leaseCache.cachesIndex)
-	}
-	// remove old cache
-	if usedCount != "1" {
-		if cache, ok := leaseCache.caches[strconv.Itoa(count-1)]; ok {
-			if cache.Contains(key) {
-				leaseCache.remove(key, strconv.Itoa(count-1))
-				leaseCache.size--
-			}
-		}
-	}
-	leaseCache.size++
-	return nil
-}
-
-// Remove oldest key from cache
-func (leaseCache *leaseCache) Remove() (string, error) {
-	if key, _, ok := leaseCache.caches[strconv.Itoa(leaseCache.cachesIndex[0])].GetOldest(); ok {
-		leaseCache.remove(key, strconv.Itoa(leaseCache.cachesIndex[0]))
-		leaseCache.size--
-		return key, nil
-	}
-	return "", fmt.Errorf("leaseCache have empty cache with cachesIndex")
-}
-
-func (leaseCache *leaseCache) remove(key string, usedCount string) {
-	leaseCache.caches[usedCount].Remove(key)
-	if leaseCache.caches[usedCount].Len() == 0 {
-		delete(leaseCache.caches, usedCount)
-		var newCachesIndex []int
-		for _, index := range leaseCache.cachesIndex {
-			if usedCount != strconv.Itoa(index) {
-				newCachesIndex = append(newCachesIndex, index)
-			}
-		}
-		leaseCache.cachesIndex = newCachesIndex
-	}
-}
-
-// Len return the size of leaseCache
-func (leaseCache *leaseCache) Len() int {
-	return leaseCache.size
-}
-
-type key int
-
-const (
-	Cache key = iota
-)
 
 type RemoteCache struct {
 	mutex sync.Mutex
 	// remoteCache is a map for caching target layer descriptors, the cache key is the source layer digest,
 	// and the cache value is the target layer descriptor after conversion.
-	remoteCache map[string]ocispec.Descriptor
+	cache map[digest.Digest]*CacheItem
 	// cacheRef is the remote cache reference.
 	cacheRef string
 	// host is a func to provide registry credential by host name.
@@ -161,36 +60,57 @@ type RemoteCache struct {
 	cacheSize int
 }
 
-func NewRemoteCache(cacheSize int, cacheRef string, host remote.HostFunc) (*RemoteCache, error) {
-	return &RemoteCache{
-		remoteCache: make(map[string]ocispec.Descriptor),
-		host:        host,
-		cacheSize:   cacheSize,
-		cacheRef:    cacheRef,
-	}, nil
-}
-
-func (rc *RemoteCache) Values() []ocispec.Descriptor {
-	rc.mutex.Lock()
-	defer rc.mutex.Unlock()
-	var values []ocispec.Descriptor
-	for _, desc := range rc.remoteCache {
-		values = append(values, desc)
+func GetFromContext(ctx context.Context, dgst digest.Digest) (*RemoteCache, *ocispec.Descriptor) {
+	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
+	if ok {
+		return rc, rc.Get(dgst)
 	}
-	return values
+	return nil, nil
 }
 
-func (rc *RemoteCache) Get(key string) (ocispec.Descriptor, bool) {
-	rc.mutex.Lock()
-	defer rc.mutex.Unlock()
-	value, ok := rc.remoteCache[key]
-	return value, ok
+func NewRemoteCache(ctx context.Context, cacheSize int, cacheRef string, host remote.HostFunc) (context.Context, *RemoteCache) {
+	cache := &RemoteCache{
+		cache:     make(map[digest.Digest]*CacheItem),
+		host:      host,
+		cacheSize: cacheSize,
+		cacheRef:  cacheRef,
+	}
+	cxt := context.WithValue(ctx, cacheKey{}, cache)
+	return cxt, cache
 }
 
-func (rc *RemoteCache) Add(key string, value ocispec.Descriptor) {
+func (rc *RemoteCache) getByTarget(target digest.Digest) *CacheItem {
+	for _, item := range rc.cache {
+		if item.Target.Digest == target {
+			return item
+		}
+	}
+	return nil
+}
+
+func (rc *RemoteCache) getBySource(source digest.Digest) *CacheItem {
+	return rc.cache[source]
+}
+
+func (rc *RemoteCache) Get(digest digest.Digest) *ocispec.Descriptor {
 	rc.mutex.Lock()
 	defer rc.mutex.Unlock()
-	rc.remoteCache[key] = value
+	if item := rc.getBySource(digest); item != nil {
+		return &item.Source
+	}
+	if item := rc.getByTarget(digest); item != nil {
+		return &item.Target
+	}
+	return nil
+}
+
+func (rc *RemoteCache) Set(source, target ocispec.Descriptor) {
+	rc.mutex.Lock()
+	defer rc.mutex.Unlock()
+	rc.cache[source.Digest] = &CacheItem{
+		Source: source,
+		Target: target,
+	}
 }
 
 // Fetch fetch cache manifest from remote
@@ -206,10 +126,6 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 	}
 	name, desc, err := remoteContext.Resolver.Resolve(ctx, rc.cacheRef)
 	if err != nil {
-		if errors.Is(err, containerdErrDefs.ErrNotFound) {
-			// Remote cache may do not exist, just return nil
-			return nil, nil
-		}
 		return nil, err
 	}
 	fetcher, err := remoteContext.Resolver.Fetcher(ctx, name)
@@ -218,15 +134,7 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 	}
 	ir, err := fetcher.Fetch(ctx, desc)
 	if err != nil {
-		if errdefs.NeedsRetryWithHTTP(err) {
-			pvd.UsePlainHTTP()
-			ir, err = fetcher.Fetch(ctx, desc)
-			if err != nil {
-				return nil, errors.Wrap(err, "try to pull remote cache")
-			}
-		} else {
-			return nil, errors.Wrap(err, "pull remote cache")
-		}
+		return nil, errors.Wrap(err, "pull remote cache")
 	}
 	defer ir.Close()
 	mBytes, err := io.ReadAll(ir)
@@ -283,11 +191,22 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 
 		}
 		for _, manifest := range targetManifests {
-			for _, layer := range manifest.Layers {
-				sourceDesc, ok := layer.Annotations[nydusutils.LayerAnnotationNydusSourceDigest]
-				if ok {
-					rc.Add(sourceDesc, layer)
+			for _, targetDesc := range manifest.Layers {
+				sourceDigest := digest.Digest(targetDesc.Annotations[nydusify.LayerAnnotationNydusSourceDigest])
+				reader, sourceDesc, err := fetcher.(remotes.FetcherByDigest).FetchByDigest(ctx, sourceDigest)
+				if err != nil {
+					return nil, err
 				}
+				reader.Close()
+				if sourceDesc.Annotations == nil {
+					sourceDesc.Annotations = map[string]string{}
+				}
+				sourceDesc.Annotations[nydusify.LayerAnnotationNydusTargetDigest] = string(targetDesc.Digest)
+				if targetDesc.Annotations == nil {
+					targetDesc.Annotations = map[string]string{}
+				}
+				targetDesc.Annotations[nydusify.LayerAnnotationUncompressed] = string(targetDesc.Digest)
+				rc.Set(sourceDesc, targetDesc)
 			}
 		}
 		return manifestIndexDesc, nil
@@ -439,7 +358,7 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 func (rc *RemoteCache) UpdateAndPush(ctx context.Context, provider Provider, orgDesc, newDesc *ocispec.Descriptor, platformMC platforms.MatchComparer) error {
 	// Fetch the old remote cache before updating and pushing the new one to avoid conflict.
 	cacheDesc, err := rc.Fetch(ctx, provider, platformMC)
-	if err != nil {
+	if err != nil && !errors.Is(err, ctrErrdefs.ErrNotFound) {
 		return err
 	}
 	cacheIndex, err := rc.update(ctx, provider, orgDesc, newDesc, cacheDesc, platformMC)
@@ -471,7 +390,7 @@ func getConvertedLayers(ctx context.Context, cs content.Store, sourceManiDesc, t
 	for i := len(targetLayers) - 1; i >= 0; i-- {
 		layer := targetLayers[i]
 		// Update <LayerAnnotationNydusSourceDigest> label for each layer
-		layer.Annotations[nydusutils.LayerAnnotationNydusSourceDigest] = sourceManifest.Layers[i].Digest.String()
+		layer.Annotations[nydusify.LayerAnnotationNydusSourceDigest] = sourceManifest.Layers[i].Digest.String()
 		cacheLayers = append(cacheLayers, layer)
 	}
 

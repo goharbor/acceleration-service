@@ -41,14 +41,14 @@ const maxRetry = 3
 
 // Modified from containerd project, copyright The containerd Authors.
 // https://github.com/containerd/containerd/remotes/docker/fetcher.go
-func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, insecureHost HostFunc, plainHTTP bool) (content.ReaderAt, error) {
+func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, host HostFunc, plainHTTP bool) (content.ReaderAt, error) {
 	ctx = log.WithLogger(ctx, log.G(ctx).WithField("digest", desc.Digest))
 
 	refspec, err := reference.Parse(cacheRef)
 	if err != nil {
 		return nil, err
 	}
-	cred, insecure, err := insecureHost(cacheRef)
+	cred, insecure, err := host(cacheRef)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, insecu
 	// try to use open to trigger http request
 	if _, err = hrs.open(0); err != nil {
 		if acceldErrdefs.NeedsRetryWithHTTP(err) {
-			return Fetch(ctx, cacheRef, desc, insecureHost, true)
+			return Fetch(ctx, cacheRef, desc, host, true)
 		}
 	}
 	return hrs, nil

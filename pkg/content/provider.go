@@ -43,5 +43,5 @@ type Provider interface {
 	// ContentStore gets the content store object of containerd.
 	ContentStore() content.Store
 	// RemoteCache gets the remote cache of the source reference.
-	NewRemoteCache(ref string) (*RemoteCache, bool)
+	NewRemoteCache(ctx context.Context, ref string) (context.Context, *RemoteCache)
 }

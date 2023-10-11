@@ -26,13 +26,12 @@ import (
 	ctrcontent "github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/labels"
 	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/dustin/go-humanize"
-	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
+
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -249,38 +248,23 @@ func (content *Content) updateLease(digest *digest.Digest) error {
 
 func (content *Content) Info(ctx context.Context, dgst digest.Digest) (ctrcontent.Info, error) {
 	info, err := content.store.Info(ctx, dgst)
-	if remoteCache, ok := ctx.Value(Cache).(*RemoteCache); ok {
-		if err != nil {
-			if errors.Is(err, errdefs.ErrNotFound) {
-				layers := remoteCache.Values()
-				for _, layer := range layers {
-					if layer.Digest == dgst {
-						if layer.Annotations == nil {
-							layer.Annotations = map[string]string{}
-						}
-						layer.Annotations[labels.LabelUncompressed] = layer.Digest.String()
-						return ctrcontent.Info{
-							Digest: layer.Digest,
-							Size:   layer.Size,
-							Labels: layer.Annotations,
-						}, nil
-					}
-				}
-			}
-			return info, err
-		}
-		if desc, ok := remoteCache.Get(dgst.String()); ok {
-			if info.Labels == nil {
-				info.Labels = map[string]string{}
-			}
-			info.Labels[nydusutils.LayerAnnotationNydusTargetDigest] = desc.Digest.String()
-		}
 
+	if errors.Is(err, errdefs.ErrNotFound) {
+		if _, cached := GetFromContext(ctx, dgst); cached != nil {
+			return ctrcontent.Info{
+				Digest: cached.Digest,
+				Size:   cached.Size,
+				Labels: cached.Annotations,
+			}, nil
+		}
 	}
+
 	return info, err
 }
 
 func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldpaths ...string) (ctrcontent.Info, error) {
+	dgst := info.Digest
+
 	// containerd content store write labels to annotate some blobs belong to a same repo,
 	// cleaning gc related labels
 	for k := range info.Labels {
@@ -288,7 +272,19 @@ func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldp
 			delete(info.Labels, k)
 		}
 	}
-	return content.store.Update(ctx, info, fieldpaths...)
+
+	info, err := content.store.Update(ctx, info, fieldpaths...)
+	if errors.Is(err, errdefs.ErrNotFound) {
+		if _, cached := GetFromContext(ctx, dgst); cached != nil {
+			return ctrcontent.Info{
+				Digest: cached.Digest,
+				Size:   cached.Size,
+				Labels: cached.Annotations,
+			}, nil
+		}
+	}
+
+	return info, err
 }
 
 func (content *Content) Walk(ctx context.Context, fn ctrcontent.WalkFunc, fs ...string) error {
@@ -300,18 +296,16 @@ func (content *Content) Delete(ctx context.Context, dgst digest.Digest) error {
 }
 
 func (content *Content) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (ctrcontent.ReaderAt, error) {
-	readerAt, err := content.store.ReaderAt(ctx, desc)
-	if err != nil {
-		if remoteCache, ok := ctx.Value(Cache).(*RemoteCache); ok && errors.Is(err, errdefs.ErrNotFound) {
-			for _, layer := range remoteCache.Values() {
-				if layer.Digest == desc.Digest {
-					return remote.Fetch(ctx, remoteCache.cacheRef, desc, remoteCache.host, false)
-				}
-			}
+	defer content.updateLease(&desc.Digest)
+
+	ra, err := content.store.ReaderAt(ctx, desc)
+	if errors.Is(err, errdefs.ErrNotFound) {
+		if rc, cached := GetFromContext(ctx, desc.Digest); cached != nil {
+			return remote.Fetch(ctx, rc.cacheRef, desc, rc.host, true)
 		}
-		return readerAt, err
 	}
-	return readerAt, content.updateLease(&desc.Digest)
+
+	return ra, err
 }
 
 func (content *Content) Status(ctx context.Context, ref string) (ctrcontent.Status, error) {
@@ -327,6 +321,16 @@ func (content *Content) Abort(ctx context.Context, ref string) error {
 }
 
 func (content *Content) Writer(ctx context.Context, opts ...ctrcontent.WriterOpt) (ctrcontent.Writer, error) {
+	wopts := ctrcontent.WriterOpts{}
+	for _, opt := range opts {
+		opt(&wopts)
+	}
+	if wopts.Desc.Digest != "" {
+		if _, cached := GetFromContext(ctx, wopts.Desc.Digest); cached != nil {
+			return nil, errdefs.ErrAlreadyExists
+		}
+	}
+
 	writer, err := content.store.Writer(ctx, opts...)
 	return &localWriter{writer, content}, err
 }
