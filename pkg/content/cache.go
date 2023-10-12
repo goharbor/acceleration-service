@@ -60,10 +60,38 @@ type RemoteCache struct {
 	cacheSize int
 }
 
+func mergeMap(left, right map[string]string) map[string]string {
+	if left == nil {
+		left = map[string]string{}
+	}
+	if right == nil {
+		right = map[string]string{}
+	}
+	for k, v := range right {
+		left[k] = v
+	}
+	return left
+}
+
 func GetFromContext(ctx context.Context, dgst digest.Digest) (*RemoteCache, *ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
 		return rc, rc.Get(dgst)
+	}
+	return nil, nil
+}
+
+func SetFromContext(ctx context.Context, dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
+	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
+	if ok {
+		if item := rc.getBySource(dgst); item != nil {
+			item.Source.Annotations = mergeMap(item.Source.Annotations, labels)
+			return rc, &item.Source
+		}
+		if item := rc.getByTarget(dgst); item != nil {
+			item.Target.Annotations = mergeMap(item.Source.Annotations, labels)
+			return rc, &item.Target
+		}
 	}
 	return nil, nil
 }
@@ -240,7 +268,7 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 
 	switch orgDesc.MediaType {
 	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
-		targetLayers, err := getConvertedLayers(ctx, cs, *orgDesc, *newDesc)
+		targetLayers, err := rc.getTargetLayers(ctx, cs, *orgDesc)
 		if err != nil {
 			return nil, err
 		}
@@ -275,7 +303,7 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 				}
 
 				if matcher.Match(orgManiPlatforms[0]) {
-					targetLayers, err = getConvertedLayers(ctx, cs, orgManifestDesc, newManifestDesc)
+					targetLayers, err = rc.getTargetLayers(ctx, cs, orgManifestDesc)
 					if err != nil {
 						return nil, err
 					}
@@ -368,33 +396,23 @@ func (rc *RemoteCache) UpdateAndPush(ctx context.Context, provider Provider, org
 	return rc.push(ctx, provider, cacheIndex)
 }
 
-// getConvertedLayers get converted layers of nydus image and corresponding source image layers from the descriptor
-// from nydus image and source image
-func getConvertedLayers(ctx context.Context, cs content.Store, sourceManiDesc, targetManiDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+// getTargetLayers get cached target layers
+func (rc *RemoteCache) getTargetLayers(ctx context.Context, cs content.Store, sourceManiDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 	sourceManifest := ocispec.Manifest{}
 	_, err := utils.ReadJSON(ctx, cs, &sourceManifest, sourceManiDesc)
 	if err != nil {
 		return nil, errors.Wrap(err, "read original manifest json")
 	}
 
-	targetManifest := ocispec.Manifest{}
-	_, err = utils.ReadJSON(ctx, cs, &targetManifest, targetManiDesc)
-	if err != nil {
-		return nil, errors.Wrap(err, "read new manifest json")
-	}
-	// the final layer of Layers is boostrap layer of nydus image, it doesn't have corresponding source image layer
-	targetLayers := targetManifest.Layers[:len(targetManifest.Layers)-1]
+	targetLayers := []ocispec.Descriptor{}
 
-	// Update cache to cacheLayers from upper to lower and update layer laebl
-	cacheLayers := []ocispec.Descriptor{}
-	for i := len(targetLayers) - 1; i >= 0; i-- {
-		layer := targetLayers[i]
-		// Update <LayerAnnotationNydusSourceDigest> label for each layer
-		layer.Annotations[nydusify.LayerAnnotationNydusSourceDigest] = sourceManifest.Layers[i].Digest.String()
-		cacheLayers = append(cacheLayers, layer)
+	for _, sourceLayer := range sourceManifest.Layers {
+		if item := rc.getBySource(sourceLayer.Digest); item != nil {
+			targetLayers = append(targetLayers, item.Target)
+		}
 	}
 
-	return cacheLayers, nil
+	return targetLayers, nil
 }
 
 // appendLayersappend new cache layers to cache manifest layers, if new layer already exists, moving existed layers to front, avoiding to add duplicated layers.

@@ -247,24 +247,18 @@ func (content *Content) updateLease(digest *digest.Digest) error {
 }
 
 func (content *Content) Info(ctx context.Context, dgst digest.Digest) (ctrcontent.Info, error) {
-	info, err := content.store.Info(ctx, dgst)
-
-	if errors.Is(err, errdefs.ErrNotFound) {
-		if _, cached := GetFromContext(ctx, dgst); cached != nil {
-			return ctrcontent.Info{
-				Digest: cached.Digest,
-				Size:   cached.Size,
-				Labels: cached.Annotations,
-			}, nil
-		}
+	if _, cached := GetFromContext(ctx, dgst); cached != nil {
+		return ctrcontent.Info{
+			Digest: cached.Digest,
+			Size:   cached.Size,
+			Labels: cached.Annotations,
+		}, nil
 	}
 
-	return info, err
+	return content.store.Info(ctx, dgst)
 }
 
 func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldpaths ...string) (ctrcontent.Info, error) {
-	dgst := info.Digest
-
 	// containerd content store write labels to annotate some blobs belong to a same repo,
 	// cleaning gc related labels
 	for k := range info.Labels {
@@ -274,14 +268,12 @@ func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldp
 	}
 
 	info, err := content.store.Update(ctx, info, fieldpaths...)
-	if errors.Is(err, errdefs.ErrNotFound) {
-		if _, cached := GetFromContext(ctx, dgst); cached != nil {
-			return ctrcontent.Info{
-				Digest: cached.Digest,
-				Size:   cached.Size,
-				Labels: cached.Annotations,
-			}, nil
-		}
+	if _, cached := SetFromContext(ctx, info.Digest, info.Labels); cached != nil {
+		return ctrcontent.Info{
+			Digest: cached.Digest,
+			Size:   cached.Size,
+			Labels: cached.Annotations,
+		}, nil
 	}
 
 	return info, err
@@ -326,7 +318,7 @@ func (content *Content) Writer(ctx context.Context, opts ...ctrcontent.WriterOpt
 		opt(&wopts)
 	}
 	if wopts.Desc.Digest != "" {
-		if _, cached := GetFromContext(ctx, wopts.Desc.Digest); cached != nil {
+		if _, cached := SetFromContext(ctx, wopts.Desc.Digest, wopts.Desc.Annotations); cached != nil {
 			return nil, errdefs.ErrAlreadyExists
 		}
 	}
