@@ -35,6 +35,7 @@ import (
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	encryption "github.com/containerd/nydus-snapshotter/pkg/encryption"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
+	"github.com/goharbor/acceleration-service/pkg/cache"
 	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
@@ -323,7 +324,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 	convertFunc := func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (*ocispec.Descriptor, error) {
 		target, err := nydusify.LayerConvertFunc(packOpt)(ctx, cs, desc)
 		if err == nil && target != nil {
-			accelcontent.SetFromContext(ctx, desc, *target)
+			cache.Set(ctx, desc, *target)
 		}
 		return target, err
 	}

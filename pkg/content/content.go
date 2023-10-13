@@ -32,6 +32,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/dustin/go-humanize"
 
+	"github.com/goharbor/acceleration-service/pkg/cache"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -56,6 +57,8 @@ type Content struct {
 	lc *leaseCache
 	// store is the local content store wrapped inner db
 	store ctrcontent.Store
+	// hosts provides remote registry access methods.
+	hosts remote.HostFunc
 	// Threshold is the maximum capacity of the local caches storage
 	Threshold int64
 }
@@ -63,7 +66,7 @@ type Content struct {
 // NewContent return content support by content store, bolt database and threshold.
 // content store created in contentDir and  bolt database created in databaseDir.
 // content.db supported by bolt database and content store, content.lm supported by content.db.
-func NewContent(contentDir string, databaseDir string, threshold string) (*Content, error) {
+func NewContent(hosts remote.HostFunc, contentDir string, databaseDir string, threshold string) (*Content, error) {
 	store, err := local.NewLabeledStore(contentDir, newMemoryLabelStore())
 	if err != nil {
 		return nil, errors.Wrap(err, "create local provider content store")
@@ -92,6 +95,7 @@ func NewContent(contentDir string, databaseDir string, threshold string) (*Conte
 		GcMutex:        &sync.RWMutex{},
 		lc:             lc,
 		store:          db.ContentStore(),
+		hosts:          hosts,
 		Threshold:      int64(t),
 	}
 	return &content, nil
@@ -247,7 +251,7 @@ func (content *Content) updateLease(digest *digest.Digest) error {
 }
 
 func (content *Content) Info(ctx context.Context, dgst digest.Digest) (ctrcontent.Info, error) {
-	if _, cached := GetFromContext(ctx, dgst); cached != nil {
+	if _, cached := cache.Get(ctx, dgst); cached != nil {
 		return ctrcontent.Info{
 			Digest: cached.Digest,
 			Size:   cached.Size,
@@ -268,7 +272,7 @@ func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldp
 	}
 
 	info, err := content.store.Update(ctx, info, fieldpaths...)
-	if _, cached := UpdateFromContext(ctx, info.Digest, info.Labels); cached != nil {
+	if _, cached := cache.Update(ctx, info.Digest, info.Labels); cached != nil {
 		return ctrcontent.Info{
 			Digest: cached.Digest,
 			Size:   cached.Size,
@@ -292,8 +296,8 @@ func (content *Content) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (
 
 	ra, err := content.store.ReaderAt(ctx, desc)
 	if errors.Is(err, errdefs.ErrNotFound) {
-		if rc, cached := GetFromContext(ctx, desc.Digest); cached != nil {
-			return remote.Fetch(ctx, rc.ref, desc, rc.hosts, true)
+		if rc, cached := cache.Get(ctx, desc.Digest); cached != nil {
+			return remote.Fetch(ctx, rc.Ref, desc, content.hosts, true)
 		}
 	}
 
@@ -318,7 +322,7 @@ func (content *Content) Writer(ctx context.Context, opts ...ctrcontent.WriterOpt
 		opt(&wopts)
 	}
 	if wopts.Desc.Digest != "" {
-		if _, cached := UpdateFromContext(ctx, wopts.Desc.Digest, wopts.Desc.Annotations); cached != nil {
+		if _, cached := cache.Update(ctx, wopts.Desc.Digest, wopts.Desc.Annotations); cached != nil {
 			return nil, errdefs.ErrAlreadyExists
 		}
 	}

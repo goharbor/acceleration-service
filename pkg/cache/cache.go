@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package content
+package cache
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 
 	ctrErrdefs "github.com/containerd/containerd/errdefs"
-	"github.com/goharbor/acceleration-service/pkg/remote"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 
@@ -43,50 +42,45 @@ import (
 
 type cacheKey struct{}
 
-type CacheItem struct {
+type Item struct {
 	Source ocispec.Descriptor
 	Target ocispec.Descriptor
+}
+
+type Provider interface {
+	Resolver(ref string) (remotes.Resolver, error)
+	Pull(ctx context.Context, ref string) error
+	Push(ctx context.Context, desc ocispec.Descriptor, ref string) error
+	ContentStore() content.Store
 }
 
 // RemoteCache manages the map of source and target layer after conversion,
 // it's local records of the remote cache manifest.
 type RemoteCache struct {
+	// ref is the reference of cache manifest in remote registry.
+	Ref string
+
+	provider Provider
+	// mutex protects records map.
 	mutex sync.Mutex
 	// records is a map for caching source -> target layer descriptors.
-	records map[digest.Digest]*CacheItem
-	// ref is the reference of cache manifest in remote registry.
-	ref string
-	// hosts is a func to provide registry credential by host name.
-	hosts remote.HostFunc
+	records map[digest.Digest]*Item
 	// size is the cache record capacity of target layers.
 	size int
 }
 
-func mergeMap(left, right map[string]string) map[string]string {
-	if left == nil {
-		left = map[string]string{}
-	}
-	if right == nil {
-		right = map[string]string{}
-	}
-	for k, v := range right {
-		left[k] = v
-	}
-	return left
-}
-
-func NewRemoteCache(ctx context.Context, size int, ref string, hosts remote.HostFunc) (context.Context, *RemoteCache) {
+func New(ctx context.Context, ref string, size int, pvd Provider) (context.Context, *RemoteCache) {
 	cache := &RemoteCache{
-		records: make(map[digest.Digest]*CacheItem),
-		hosts:   hosts,
-		size:    size,
-		ref:     ref,
+		Ref:      ref,
+		provider: pvd,
+		records:  make(map[digest.Digest]*Item),
+		size:     size,
 	}
 	cxt := context.WithValue(ctx, cacheKey{}, cache)
 	return cxt, cache
 }
 
-func (rc *RemoteCache) getByTarget(target digest.Digest) *CacheItem {
+func (rc *RemoteCache) getByTarget(target digest.Digest) *Item {
 	for _, item := range rc.records {
 		if item.Target.Digest == target {
 			return item
@@ -95,7 +89,7 @@ func (rc *RemoteCache) getByTarget(target digest.Digest) *CacheItem {
 	return nil
 }
 
-func (rc *RemoteCache) getBySource(source digest.Digest) *CacheItem {
+func (rc *RemoteCache) getBySource(source digest.Digest) *Item {
 	return rc.records[source]
 }
 
@@ -114,13 +108,31 @@ func (rc *RemoteCache) get(digest digest.Digest) *ocispec.Descriptor {
 func (rc *RemoteCache) set(source, target ocispec.Descriptor) {
 	rc.mutex.Lock()
 	defer rc.mutex.Unlock()
-	rc.records[source.Digest] = &CacheItem{
+	if source.Annotations == nil {
+		source.Annotations = map[string]string{}
+	}
+	source.Annotations[nydusify.LayerAnnotationNydusTargetDigest] = string(target.Digest)
+	target.Annotations[nydusify.LayerAnnotationNydusSourceDigest] = string(source.Digest)
+	rc.records[source.Digest] = &Item{
 		Source: source,
 		Target: target,
 	}
 }
 
-func GetFromContext(ctx context.Context, dgst digest.Digest) (*RemoteCache, *ocispec.Descriptor) {
+func mergeMap(left, right map[string]string) map[string]string {
+	if left == nil {
+		left = map[string]string{}
+	}
+	if right == nil {
+		right = map[string]string{}
+	}
+	for k, v := range right {
+		left[k] = v
+	}
+	return left
+}
+
+func Get(ctx context.Context, dgst digest.Digest) (*RemoteCache, *ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
 		return rc, rc.get(dgst)
@@ -128,15 +140,14 @@ func GetFromContext(ctx context.Context, dgst digest.Digest) (*RemoteCache, *oci
 	return nil, nil
 }
 
-func SetFromContext(ctx context.Context, source, target ocispec.Descriptor) {
+func Set(ctx context.Context, source, target ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
 		rc.set(source, target)
 	}
 }
 
-// UpdateFromContext sets cache record.
-func UpdateFromContext(ctx context.Context, dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
+func Update(ctx context.Context, dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
 		if item := rc.getBySource(dgst); item != nil {
@@ -152,17 +163,16 @@ func UpdateFromContext(ctx context.Context, dgst digest.Digest, labels map[strin
 }
 
 // Fetch fetchs cache manifest from remote registry.
-func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platforms.MatchComparer) (*ocispec.Descriptor, error) {
-	resolver, err := pvd.Resolver(rc.ref)
+func (rc *RemoteCache) Fetch(ctx context.Context, platformMC platforms.MatchComparer) (*ocispec.Descriptor, error) {
+	resolver, err := rc.provider.Resolver(rc.Ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "get resolver for remote cache")
+		return nil, err
 	}
-
 	remoteContext := &containerd.RemoteContext{
 		Resolver:        resolver,
 		PlatformMatcher: platformMC,
 	}
-	name, desc, err := remoteContext.Resolver.Resolve(ctx, rc.ref)
+	name, desc, err := remoteContext.Resolver.Resolve(ctx, rc.Ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolve remote cache")
 	}
@@ -180,7 +190,6 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 		return nil, errors.Wrap(err, "read remote cache bytes to manifest index")
 	}
 
-	cs := pvd.ContentStore()
 	switch desc.MediaType {
 	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 		manifestIndex := ocispec.Index{}
@@ -191,7 +200,7 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 		if err != nil {
 			return nil, errors.Wrap(err, "marshal remote cache manifest index")
 		}
-		if err = content.WriteBlob(ctx, cs, rc.ref, bytes.NewReader(mBytes), *manifestIndexDesc); err != nil {
+		if err = content.WriteBlob(ctx, rc.provider.ContentStore(), rc.Ref, bytes.NewReader(mBytes), *manifestIndexDesc); err != nil {
 			return nil, errors.Wrap(err, "write remote cache manifest index")
 		}
 		for _, manifest := range manifestIndex.Manifests {
@@ -208,20 +217,20 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 			if err != nil {
 				return nil, errors.Wrap(err, "read remote cache manifest")
 			}
-			if err = content.WriteBlob(ctx, cs, rc.ref, bytes.NewReader(manifestBytes), mDesc); err != nil {
+			if err = content.WriteBlob(ctx, rc.provider.ContentStore(), rc.Ref, bytes.NewReader(manifestBytes), mDesc); err != nil {
 				return nil, errors.Wrap(err, "write remote cache manifest")
 			}
 		}
 
 		// Get manifests which matches specified platforms and put them into cache records
-		matchDescs, err := utils.GetManifests(ctx, cs, *manifestIndexDesc, platformMC)
+		matchDescs, err := utils.GetManifests(ctx, rc.provider.ContentStore(), *manifestIndexDesc, platformMC)
 		if err != nil {
 			return nil, errors.Wrap(err, "get remote cache manifest list")
 		}
 		var targetManifests []ocispec.Manifest
 		for _, desc := range matchDescs {
 			targetManifest := ocispec.Manifest{}
-			_, err = utils.ReadJSON(ctx, cs, &targetManifest, desc)
+			_, err = utils.ReadJSON(ctx, rc.provider.ContentStore(), &targetManifest, desc)
 			if err != nil {
 				return nil, errors.Wrap(err, "read remote cache manifest")
 			}
@@ -240,10 +249,6 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 					return nil, errors.Wrap(err, "read remote cache manifest")
 				}
 				reader.Close()
-				if sourceDesc.Annotations == nil {
-					sourceDesc.Annotations = map[string]string{}
-				}
-				sourceDesc.Annotations[nydusify.LayerAnnotationNydusTargetDigest] = string(targetDesc.Digest)
 				if targetDesc.Annotations == nil {
 					targetDesc.Annotations = map[string]string{}
 				}
@@ -258,23 +263,18 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 }
 
 // Push merges local and remote cache records, then push cache manifest to remote registry.
-func (rc *RemoteCache) Push(ctx context.Context, provider Provider, orgDesc, newDesc *ocispec.Descriptor, platformMC platforms.MatchComparer) error {
+func (rc *RemoteCache) Push(ctx context.Context, orgDesc, newDesc *ocispec.Descriptor, platformMC platforms.MatchComparer) error {
 	// Fetch the remote cache before pushing the new one to avoid conflict .
-	cacheDesc, err := rc.Fetch(ctx, provider, platformMC)
+	cacheDesc, err := rc.Fetch(ctx, platformMC)
 	if err != nil && !errors.Is(err, ctrErrdefs.ErrNotFound) {
 		return err
 	}
-	cacheIndex, err := rc.update(ctx, provider, orgDesc, newDesc, cacheDesc, platformMC)
+	cacheIndex, err := rc.update(ctx, orgDesc, newDesc, cacheDesc, platformMC)
 	if err != nil {
 		return err
 	}
-	return rc.push(ctx, provider, cacheIndex)
-}
-
-// push pushes cache manifest to remote registry.
-func (rc *RemoteCache) push(ctx context.Context, pvd Provider, cacheIndex *ocispec.Index) error {
 	for _, manifest := range cacheIndex.Manifests {
-		if err := pvd.Push(ctx, manifest, rc.ref); err != nil {
+		if err := rc.provider.Push(ctx, manifest, rc.Ref); err != nil {
 			return err
 		}
 	}
@@ -282,56 +282,55 @@ func (rc *RemoteCache) push(ctx context.Context, pvd Provider, cacheIndex *ocisp
 	if err != nil {
 		return errors.Wrap(err, "marshal remote cache manifest index")
 	}
-	if err = content.WriteBlob(ctx, pvd.ContentStore(), rc.ref, bytes.NewReader(manifestIndexBytes), *manifestIndexDesc); err != nil {
+	if err = content.WriteBlob(ctx, rc.provider.ContentStore(), rc.Ref, bytes.NewReader(manifestIndexBytes), *manifestIndexDesc); err != nil {
 		return errors.Wrap(err, "write remote cache manifest index")
 	}
-	return pvd.Push(ctx, *manifestIndexDesc, rc.ref)
+	return rc.provider.Push(ctx, *manifestIndexDesc, rc.Ref)
 }
 
 // update updates cache manifests, it preferentially keep the lower layers if the cache capacity is full.
-func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, newDesc, cacheDesc *ocispec.Descriptor,
+func (rc *RemoteCache) update(ctx context.Context, orgDesc, newDesc, cacheDesc *ocispec.Descriptor,
 	platformMC platforms.MatchComparer) (*ocispec.Index, error) {
-	cs := provider.ContentStore()
 	targetLayersByPlatform := map[*platforms.Platform][]ocispec.Descriptor{}
 
 	switch orgDesc.MediaType {
 	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
-		targetLayers, err := rc.getTargetLayers(ctx, cs, *orgDesc)
+		targetLayers, err := rc.getTargetLayers(ctx, rc.provider.ContentStore(), *orgDesc)
 		if err != nil {
 			return nil, err
 		}
 		// platform of original or new image maybe lost, get from config platform
-		platform, err := images.Platforms(ctx, cs, *orgDesc)
+		platform, err := images.Platforms(ctx, rc.provider.ContentStore(), *orgDesc)
 		if err != nil {
 			return nil, err
 		}
 		targetLayersByPlatform[&platform[0]] = targetLayers
 
 	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-		orgManifests, err := utils.GetManifests(ctx, cs, *orgDesc, platformMC)
+		orgManifests, err := utils.GetManifests(ctx, rc.provider.ContentStore(), *orgDesc, platformMC)
 		if err != nil {
 			return nil, errors.Wrap(err, "get source manifest list")
 		}
-		newManifests, err := utils.GetManifests(ctx, cs, *newDesc, platformMC)
+		newManifests, err := utils.GetManifests(ctx, rc.provider.ContentStore(), *newDesc, platformMC)
 		if err != nil {
 			return nil, errors.Wrap(err, "get new manifest list")
 		}
 		for _, newManifestDesc := range newManifests {
 			targetLayers := []ocispec.Descriptor{}
-			newManiPlatforms, err := images.Platforms(ctx, cs, newManifestDesc)
+			newManiPlatforms, err := images.Platforms(ctx, rc.provider.ContentStore(), newManifestDesc)
 			if err != nil {
 				return nil, errors.Wrap(err, "get converted manifest platforms")
 			}
 			// find original manifest matches converted manifest's platform
 			matcher := platforms.NewMatcher(newManiPlatforms[0])
 			for _, orgManifestDesc := range orgManifests {
-				orgManiPlatforms, err := images.Platforms(ctx, cs, orgManifestDesc)
+				orgManiPlatforms, err := images.Platforms(ctx, rc.provider.ContentStore(), orgManifestDesc)
 				if err != nil {
 					return nil, errors.Wrap(err, "get original manifest platforms")
 				}
 
 				if matcher.Match(orgManiPlatforms[0]) {
-					targetLayers, err = rc.getTargetLayers(ctx, cs, orgManifestDesc)
+					targetLayers, err = rc.getTargetLayers(ctx, rc.provider.ContentStore(), orgManifestDesc)
 					if err != nil {
 						return nil, err
 					}
@@ -347,7 +346,7 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal remote cache image config")
 	}
-	if err = content.WriteBlob(ctx, cs, rc.ref, bytes.NewReader(imageConfigBytes), *imageConfigDesc); err != nil {
+	if err = content.WriteBlob(ctx, rc.provider.ContentStore(), rc.Ref, bytes.NewReader(imageConfigBytes), *imageConfigDesc); err != nil {
 		return nil, errors.Wrap(err, "write remote cahce image config")
 	}
 
@@ -360,7 +359,7 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 	}
 	// cacheDesc maybe nil if remote cache doesn't exists before
 	if cacheDesc != nil {
-		_, err = utils.ReadJSON(ctx, cs, &cacheIndex, *cacheDesc)
+		_, err = utils.ReadJSON(ctx, rc.provider.ContentStore(), &cacheIndex, *cacheDesc)
 		if err != nil {
 			return nil, errors.Wrap(err, "read cache manifest index")
 		}
@@ -370,12 +369,12 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 				if matcher.Match(*platform) {
 					// append new cache layers to existed cache manifest
 					var manifest ocispec.Manifest
-					_, err = utils.ReadJSON(ctx, cs, &manifest, maniDesc)
+					_, err = utils.ReadJSON(ctx, rc.provider.ContentStore(), &manifest, maniDesc)
 					if err != nil {
 						return nil, errors.Wrap(err, "read cache manifest")
 					}
 					manifest.Layers = appendLayers(manifest.Layers, layers, rc.size)
-					newManiDesc, err := utils.WriteJSON(ctx, cs, manifest, maniDesc, "", nil)
+					newManiDesc, err := utils.WriteJSON(ctx, rc.provider.ContentStore(), manifest, maniDesc, "", nil)
 					if err != nil {
 						return nil, errors.Wrap(err, "write cache manifest")
 					}
@@ -396,7 +395,7 @@ func (rc *RemoteCache) update(ctx context.Context, provider Provider, orgDesc, n
 			Config:    *imageConfigDesc,
 			Layers:    layers,
 		}
-		manifestDesc, err := utils.WriteJSON(ctx, cs, manifest, ocispec.Descriptor{}, "", nil)
+		manifestDesc, err := utils.WriteJSON(ctx, rc.provider.ContentStore(), manifest, ocispec.Descriptor{}, "", nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "write cache manifest")
 		}

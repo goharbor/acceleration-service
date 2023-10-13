@@ -25,6 +25,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
+	"github.com/goharbor/acceleration-service/pkg/cache"
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -46,7 +47,7 @@ func NewLocalProvider(cfg *config.Config, platformMC platforms.MatchComparer) (P
 	if err := os.MkdirAll(contentDir, 0755); err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider work directory")
 	}
-	content, err := NewContent(contentDir, cfg.Provider.WorkDir, cfg.Provider.GCPolicy.Threshold)
+	content, err := NewContent(cfg.Host, contentDir, cfg.Provider.WorkDir, cfg.Provider.GCPolicy.Threshold)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "create local provider content")
 	}
@@ -114,9 +115,9 @@ func (pvd *LocalProvider) ContentStore() content.Store {
 	return pvd.content
 }
 
-func (pvd *LocalProvider) NewRemoteCache(ctx context.Context, cacheRef string) (context.Context, *RemoteCache) {
+func (pvd *LocalProvider) NewRemoteCache(ctx context.Context, cacheRef string) (context.Context, *cache.RemoteCache) {
 	if cacheRef != "" {
-		return NewRemoteCache(ctx, pvd.cacheSize, cacheRef, pvd.hosts)
+		return cache.New(ctx, cacheRef, pvd.cacheSize, pvd)
 	}
 	return ctx, nil
 }

@@ -24,7 +24,7 @@ import (
 func TestContenSize(t *testing.T) {
 	os.MkdirAll("./tmp", 0755)
 	defer os.RemoveAll("./tmp")
-	content, err := NewContent("./tmp", "./tmp", "1000MB")
+	content, err := NewContent(nil, "./tmp", "./tmp", "1000MB")
 	require.NoError(t, err)
 	size, err := content.Size()
 	require.NoError(t, err)
