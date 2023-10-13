@@ -19,6 +19,7 @@ import (
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/remotes"
+	"github.com/goharbor/acceleration-service/pkg/cache"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -42,6 +43,6 @@ type Provider interface {
 	Image(ctx context.Context, ref string) (*ocispec.Descriptor, error)
 	// ContentStore gets the content store object of containerd.
 	ContentStore() content.Store
-	// RemoteCache gets the remote cache of the source reference.
-	NewRemoteCache(ref string) (*RemoteCache, bool)
+	// RemoteCache gets the remote cache for conversion.
+	NewRemoteCache(ctx context.Context, ref string) (context.Context, *cache.RemoteCache)
 }

@@ -33,7 +33,9 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/nydus-snapshotter/pkg/backend"
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
+	encryption "github.com/containerd/nydus-snapshotter/pkg/encryption"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
+	"github.com/goharbor/acceleration-service/pkg/cache"
 	accelcontent "github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver/nydus/parser"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
@@ -189,9 +191,16 @@ func New(cfg map[string]string, platformMC platforms.MatchComparer) (*Driver, er
 		encryptRecipients = strings.Split(cfg["encrypt_recipients"], ",")
 	}
 
-	if ociRef && fsVersion != "6" {
-		logrus.Warn("forcibly using fs version 6 when oci_ref option enabled")
-		fsVersion = "6"
+	if ociRef {
+		if fsVersion != "6" {
+			logrus.Warn("forcibly using fs version 6 when oci_ref option enabled")
+			fsVersion = "6"
+		}
+		if !docker2oci {
+			// For nydus zran image, since its manifest requires the use
+			// of annotations, we only support OCI-formatted manifest.
+			docker2oci = true
+		}
 	}
 
 	return &Driver{
@@ -263,17 +272,24 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		BatchSize:        d.batchSize,
 		Encrypt:          len(d.encryptRecipients) != 0,
 	}
+
+	var encrypter nydusify.Encrypter
+	if len(d.encryptRecipients) > 0 {
+		encrypter = func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (ocispec.Descriptor, error) {
+			return encryption.EncryptNydusBootstrap(ctx, cs, desc, d.encryptRecipients)
+		}
+	}
 	mergeOpt := nydusify.MergeOption{
-		WorkDir:           packOpt.WorkDir,
-		BuilderPath:       packOpt.BuilderPath,
-		FsVersion:         packOpt.FsVersion,
-		ChunkDictPath:     packOpt.ChunkDictPath,
-		PrefetchPatterns:  packOpt.PrefetchPatterns,
-		Backend:           packOpt.Backend,
-		OCI:               d.docker2oci,
-		OCIRef:            packOpt.OCIRef,
-		EncryptRecipients: d.encryptRecipients,
-		WithReferrer:      d.withReferrer,
+		WorkDir:          packOpt.WorkDir,
+		BuilderPath:      packOpt.BuilderPath,
+		FsVersion:        packOpt.FsVersion,
+		ChunkDictPath:    packOpt.ChunkDictPath,
+		PrefetchPatterns: packOpt.PrefetchPatterns,
+		Backend:          packOpt.Backend,
+		OCI:              d.docker2oci,
+		OCIRef:           packOpt.OCIRef,
+		Encrypt:          encrypter,
+		WithReferrer:     d.withReferrer,
 	}
 	convertHookFunc := func(
 		ctx context.Context, cs content.Store, orgDesc ocispec.Descriptor, newDesc *ocispec.Descriptor,
@@ -305,8 +321,15 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 	convertHooks := converter.ConvertHooks{
 		PostConvertHook: convertHookFunc,
 	}
+	convertFunc := func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (*ocispec.Descriptor, error) {
+		target, err := nydusify.LayerConvertFunc(packOpt)(ctx, cs, desc)
+		if err == nil && target != nil {
+			cache.Set(ctx, desc, *target)
+		}
+		return target, err
+	}
 	indexConvertFunc := converter.IndexConvertFuncWithHook(
-		nydusify.LayerConvertFunc(packOpt),
+		convertFunc,
 		d.docker2oci,
 		d.platformMC,
 		convertHooks,
