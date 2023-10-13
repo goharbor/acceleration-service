@@ -268,7 +268,7 @@ func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldp
 	}
 
 	info, err := content.store.Update(ctx, info, fieldpaths...)
-	if _, cached := SetFromContext(ctx, info.Digest, info.Labels); cached != nil {
+	if _, cached := UpdateFromContext(ctx, info.Digest, info.Labels); cached != nil {
 		return ctrcontent.Info{
 			Digest: cached.Digest,
 			Size:   cached.Size,
@@ -318,7 +318,7 @@ func (content *Content) Writer(ctx context.Context, opts ...ctrcontent.WriterOpt
 		opt(&wopts)
 	}
 	if wopts.Desc.Digest != "" {
-		if _, cached := SetFromContext(ctx, wopts.Desc.Digest, wopts.Desc.Annotations); cached != nil {
+		if _, cached := UpdateFromContext(ctx, wopts.Desc.Digest, wopts.Desc.Annotations); cached != nil {
 			return nil, errdefs.ErrAlreadyExists
 		}
 	}

@@ -81,7 +81,7 @@ func GetFromContext(ctx context.Context, dgst digest.Digest) (*RemoteCache, *oci
 	return nil, nil
 }
 
-func SetFromContext(ctx context.Context, dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
+func UpdateFromContext(ctx context.Context, dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
 		if item := rc.getBySource(dgst); item != nil {
@@ -94,6 +94,13 @@ func SetFromContext(ctx context.Context, dgst digest.Digest, labels map[string]s
 		}
 	}
 	return nil, nil
+}
+
+func SetFromContext(ctx context.Context, source, target ocispec.Descriptor) {
+	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
+	if ok {
+		rc.Set(source, target)
+	}
 }
 
 func NewRemoteCache(ctx context.Context, cacheSize int, cacheRef string, host remote.HostFunc) (context.Context, *RemoteCache) {
@@ -221,6 +228,9 @@ func (rc *RemoteCache) Fetch(ctx context.Context, pvd Provider, platformMC platf
 		for _, manifest := range targetManifests {
 			for _, targetDesc := range manifest.Layers {
 				sourceDigest := digest.Digest(targetDesc.Annotations[nydusify.LayerAnnotationNydusSourceDigest])
+				if sourceDigest.Validate() != nil {
+					continue
+				}
 				reader, sourceDesc, err := fetcher.(remotes.FetcherByDigest).FetchByDigest(ctx, sourceDigest)
 				if err != nil {
 					return nil, err

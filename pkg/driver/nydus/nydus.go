@@ -320,8 +320,15 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 	convertHooks := converter.ConvertHooks{
 		PostConvertHook: convertHookFunc,
 	}
+	convertFunc := func(ctx context.Context, cs content.Store, desc ocispec.Descriptor) (*ocispec.Descriptor, error) {
+		target, err := nydusify.LayerConvertFunc(packOpt)(ctx, cs, desc)
+		if err == nil && target != nil {
+			accelcontent.SetFromContext(ctx, desc, *target)
+		}
+		return target, err
+	}
 	indexConvertFunc := converter.IndexConvertFuncWithHook(
-		nydusify.LayerConvertFunc(packOpt),
+		convertFunc,
 		d.docker2oci,
 		d.platformMC,
 		convertHooks,
