@@ -293,7 +293,7 @@ func (content *Content) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (
 	ra, err := content.store.ReaderAt(ctx, desc)
 	if errors.Is(err, errdefs.ErrNotFound) {
 		if rc, cached := GetFromContext(ctx, desc.Digest); cached != nil {
-			return remote.Fetch(ctx, rc.cacheRef, desc, rc.host, true)
+			return remote.Fetch(ctx, rc.ref, desc, rc.hosts, true)
 		}
 	}
 

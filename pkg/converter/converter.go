@@ -166,7 +166,7 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 			return nil, errors.Wrap(err, "get source image")
 		}
 		logger.Infof("pushing cache %s", cacheRef)
-		if err = cache.UpdateAndPush(ctx, cvt.provider, sourceImage, desc, cvt.platformMC); err != nil {
+		if err = cache.Push(ctx, cvt.provider, sourceImage, desc, cvt.platformMC); err != nil {
 			return nil, errors.Wrap(err, "update and push cache")
 		}
 		logger.Infof("pushed cache %s", cacheRef)
