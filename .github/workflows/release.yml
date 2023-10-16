@@ -102,9 +102,6 @@ jobs:
           name: harbor-acceld-artifacts
           path: |
             ${{ env.OUTPUT_DIR }}
-      - name: Install hub Command
-        run: |
-          sudo apt install -y hub
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -115,8 +112,8 @@ jobs:
 
           (TBD)
           EOF
-          ASSET_FLAGS=()
+          ASSET_ARGS=()
           for F in ${OUTPUT_DIR}/* ; do
-            ASSET_FLAGS+=("-a" "$F")
+            ASSET_ARGS+=("$F")
           done
-          hub release create "${ASSET_FLAGS[@]}" -F ${GITHUB_WORKSPACE}/release-note.txt --draft $TAG
+          gh release create -F ${GITHUB_WORKSPACE}/release-note.txt --draft --title $TAG $TAG "${ASSET_ARGS[@]}"
