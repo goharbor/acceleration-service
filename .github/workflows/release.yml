@@ -102,6 +102,9 @@ jobs:
           name: harbor-acceld-artifacts
           path: |
             ${{ env.OUTPUT_DIR }}
+      - name: Install hub Command
+        run: |
+          sudo apt install -y hub
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
