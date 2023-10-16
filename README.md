@@ -8,7 +8,7 @@ Acceleration Service provides a general service to Harbor with the ability to au
 [![Concurrent Test](https://github.com/goharbor/acceleration-service/actions/workflows/concurrent-test.yml/badge.svg?branch=main)](https://github.com/goharbor/acceleration-service/actions/workflows/concurrent-test.yml)
 [![Webhook Test](https://github.com/goharbor/acceleration-service/actions/workflows/webhook-test.yml/badge.svg?branch=main)](https://github.com/goharbor/acceleration-service/actions/workflows/webhook-test.yml)
 
-⚠️ This project is still in progress, see more details in this [proposal](https://github.com/goharbor/community/pull/167).
+See more details in the [design](./docs/design.md) doc.
 
 ## Quickstart
 ### GETTING STARTED
