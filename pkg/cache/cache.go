@@ -81,6 +81,8 @@ func New(ctx context.Context, ref string, size int, pvd Provider) (context.Conte
 }
 
 func (rc *RemoteCache) getByTarget(target digest.Digest) *Item {
+	rc.mutex.Lock()
+	defer rc.mutex.Unlock()
 	for _, item := range rc.records {
 		if item.Target.Digest == target {
 			return item
@@ -90,12 +92,12 @@ func (rc *RemoteCache) getByTarget(target digest.Digest) *Item {
 }
 
 func (rc *RemoteCache) getBySource(source digest.Digest) *Item {
+	rc.mutex.Lock()
+	defer rc.mutex.Unlock()
 	return rc.records[source]
 }
 
 func (rc *RemoteCache) get(digest digest.Digest) *ocispec.Descriptor {
-	rc.mutex.Lock()
-	defer rc.mutex.Unlock()
 	if item := rc.getBySource(digest); item != nil {
 		return &item.Source
 	}
@@ -117,6 +119,18 @@ func (rc *RemoteCache) set(source, target ocispec.Descriptor) {
 		Source: source,
 		Target: target,
 	}
+}
+
+func (rc *RemoteCache) updateItem(dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
+	if item := rc.getBySource(dgst); item != nil {
+		item.Source.Annotations = mergeMap(item.Source.Annotations, labels)
+		return rc, &item.Source
+	}
+	if item := rc.getByTarget(dgst); item != nil {
+		item.Target.Annotations = mergeMap(item.Source.Annotations, labels)
+		return rc, &item.Target
+	}
+	return nil, nil
 }
 
 func mergeMap(left, right map[string]string) map[string]string {
@@ -150,14 +164,7 @@ func Set(ctx context.Context, source, target ocispec.Descriptor) {
 func Update(ctx context.Context, dgst digest.Digest, labels map[string]string) (*RemoteCache, *ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
-		if item := rc.getBySource(dgst); item != nil {
-			item.Source.Annotations = mergeMap(item.Source.Annotations, labels)
-			return rc, &item.Source
-		}
-		if item := rc.getByTarget(dgst); item != nil {
-			item.Target.Annotations = mergeMap(item.Source.Annotations, labels)
-			return rc, &item.Target
-		}
+		return rc.updateItem(dgst, labels)
 	}
 	return nil, nil
 }
