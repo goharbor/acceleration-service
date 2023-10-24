@@ -26,6 +26,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/reference/docker"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
+	"github.com/goharbor/acceleration-service/pkg/cache"
 	"github.com/goharbor/acceleration-service/pkg/content"
 	"github.com/goharbor/acceleration-service/pkg/driver"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
@@ -142,7 +143,11 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 	if err := metric.SetSourceImageSize(ctx, cvt, source); err != nil {
 		return nil, errors.Wrap(err, "get source image size")
 	}
-	logger.Infof("pulled image %s, elapse %s", source, metric.SourcePullElapsed)
+	hitInfo, err := cvt.cacheHitInfo(ctx, source, cache)
+	if err != nil {
+		logger.Warnf("get cache hit count: %s", err.Error())
+	}
+	logger.Infof("pulled image %s %s, elapse %s", source, hitInfo, metric.SourcePullElapsed)
 
 	logger.Infof("converting image %s", source)
 	start = time.Now()
@@ -158,7 +163,11 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 	if err := metric.SetTargetImageSize(ctx, cvt, desc); err != nil {
 		return nil, errors.Wrap(err, "get target image size")
 	}
-	logger.Infof("converted image %s, elapse %s", target, metric.ConversionElapsed)
+	hitInfo, err = cvt.cacheHitInfo(ctx, source, cache)
+	if err != nil {
+		logger.Warnf("get cache hit count: %s", err.Error())
+	}
+	logger.Infof("converted image %s %s, elapse %s", target, hitInfo, metric.ConversionElapsed)
 
 	if cache != nil {
 		sourceImage, err := cvt.provider.Image(ctx, source)
@@ -189,4 +198,19 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 	logger.Infof("pushed image %s, elapse %s", target, metric.TargetPushElapsed)
 
 	return &metric, nil
+}
+
+func (cvt *Converter) cacheHitInfo(ctx context.Context, source string, cache *cache.RemoteCache) (string, error) {
+	if cache != nil {
+		sourceImage, err := cvt.provider.Image(ctx, source)
+		if err != nil {
+			return "", err
+		}
+		cached, total, err := cache.HitCount(ctx, *sourceImage, cvt.platformMC)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("(cached %d/%d)", cached, total), nil
+	}
+	return "", nil
 }

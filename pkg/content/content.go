@@ -271,16 +271,17 @@ func (content *Content) Update(ctx context.Context, info ctrcontent.Info, fieldp
 		}
 	}
 
-	info, err := content.store.Update(ctx, info, fieldpaths...)
-	if _, cached := cache.Update(ctx, info.Digest, info.Labels); cached != nil {
-		return ctrcontent.Info{
-			Digest: cached.Digest,
-			Size:   cached.Size,
-			Labels: cached.Annotations,
-		}, nil
+	updatedInfo, err := content.store.Update(ctx, info, fieldpaths...)
+	if errors.Is(err, errdefs.ErrNotFound) {
+		if _, cached := cache.Update(ctx, info.Digest, info.Labels); cached != nil {
+			return ctrcontent.Info{
+				Digest: cached.Digest,
+				Size:   cached.Size,
+				Labels: cached.Annotations,
+			}, nil
+		}
 	}
-
-	return info, err
+	return updatedInfo, err
 }
 
 func (content *Content) Walk(ctx context.Context, fn ctrcontent.WalkFunc, fs ...string) error {
