@@ -67,6 +67,8 @@ type RemoteCache struct {
 	records map[digest.Digest]*Item
 	// size is the cache record capacity of target layers.
 	size int
+	// newAdded records the number of new caches added in one conversion.
+	newAdded uint
 }
 
 func New(ctx context.Context, ref string, size int, pvd Provider) (context.Context, *RemoteCache) {
@@ -157,6 +159,9 @@ func Get(ctx context.Context, dgst digest.Digest) (*RemoteCache, *ocispec.Descri
 func Set(ctx context.Context, source, target ocispec.Descriptor) {
 	rc, ok := ctx.Value(cacheKey{}).(*RemoteCache)
 	if ok {
+		if rc.get(source.Digest) == nil {
+			rc.newAdded++
+		}
 		rc.set(source, target)
 	}
 }
@@ -455,4 +460,35 @@ func appendLayers(orgDescs, newDescs []ocispec.Descriptor, size int) []ocispec.D
 		mergedLayers = mergedLayers[:size]
 	}
 	return mergedLayers
+}
+
+// HitCount returns the hitted and total count of cache layers in a conversion.
+func (rc *RemoteCache) HitCount(ctx context.Context, desc ocispec.Descriptor, platform platforms.MatchComparer) (uint, uint, error) {
+	maniDescs := []ocispec.Descriptor{}
+	switch desc.MediaType {
+	case ocispec.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
+		maniDescs = append(maniDescs, desc)
+	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+		descs, err := utils.GetManifests(ctx, rc.provider.ContentStore(), desc, platform)
+		if err != nil {
+			return 0, 0, err
+		}
+		maniDescs = append(maniDescs, descs...)
+	}
+	var cached, total uint
+	for _, maniDesc := range maniDescs {
+		manifest := ocispec.Manifest{}
+		_, err := utils.ReadJSON(ctx, rc.provider.ContentStore(), &manifest, maniDesc)
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "read manifest")
+		}
+		total += uint(len(manifest.Layers))
+		for _, sourceLayer := range manifest.Layers {
+			if item := rc.get(sourceLayer.Digest); item != nil {
+				cached++
+			}
+		}
+	}
+	cached -= rc.newAdded
+	return cached, total, nil
 }
