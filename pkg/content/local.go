@@ -40,6 +40,7 @@ type LocalProvider struct {
 	hosts        remote.HostFunc
 	platformMC   platforms.MatchComparer
 	cacheSize    int
+	cacheVersion string
 }
 
 func NewLocalProvider(cfg *config.Config, platformMC platforms.MatchComparer) (Provider, *Content, error) {
@@ -52,11 +53,12 @@ func NewLocalProvider(cfg *config.Config, platformMC platforms.MatchComparer) (P
 		return nil, nil, errors.Wrap(err, "create local provider content")
 	}
 	return &LocalProvider{
-		content:    content,
-		images:     make(map[string]*ocispec.Descriptor),
-		hosts:      cfg.Host,
-		platformMC: platformMC,
-		cacheSize:  cfg.Provider.CacheSize,
+		content:      content,
+		images:       make(map[string]*ocispec.Descriptor),
+		hosts:        cfg.Host,
+		platformMC:   platformMC,
+		cacheSize:    cfg.Provider.CacheSize,
+		cacheVersion: cfg.Provider.CacheVersion,
 	}, content, nil
 }
 
@@ -117,7 +119,7 @@ func (pvd *LocalProvider) ContentStore() content.Store {
 
 func (pvd *LocalProvider) NewRemoteCache(ctx context.Context, cacheRef string) (context.Context, *cache.RemoteCache) {
 	if cacheRef != "" {
-		return cache.New(ctx, cacheRef, pvd.cacheSize, pvd)
+		return cache.New(ctx, cacheRef, pvd.cacheVersion, pvd.cacheSize, pvd)
 	}
 	return ctx, nil
 }

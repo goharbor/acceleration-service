@@ -34,6 +34,8 @@ provider:
       threshold: 1000MB
   # remote cache record capacity of converted layers, default is 200.
   cache_size: 200
+  # remote cache version, cache in remote must match the specified version, or discard cache.
+  cache_version: v1 
 
 converter:
   # number of worker for executing conversion task
