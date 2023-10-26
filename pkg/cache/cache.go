@@ -40,6 +40,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const LayerAnnotationCacheVersion = "containerd.io/snapshot/nydus-cache-version"
+
 type cacheKey struct{}
 
 type Item struct {
@@ -69,14 +71,17 @@ type RemoteCache struct {
 	size int
 	// newAdded records the number of new caches added in one conversion.
 	newAdded uint
+
+	version string
 }
 
-func New(ctx context.Context, ref string, size int, pvd Provider) (context.Context, *RemoteCache) {
+func New(ctx context.Context, ref, version string, size int, pvd Provider) (context.Context, *RemoteCache) {
 	cache := &RemoteCache{
 		Ref:      ref,
 		provider: pvd,
 		records:  make(map[digest.Digest]*Item),
 		size:     size,
+		version:  version,
 	}
 	cxt := context.WithValue(ctx, cacheKey{}, cache)
 	return cxt, cache
@@ -246,8 +251,12 @@ func (rc *RemoteCache) Fetch(ctx context.Context, platformMC platforms.MatchComp
 			if err != nil {
 				return nil, errors.Wrap(err, "read remote cache manifest")
 			}
+			if targetManifest.Annotations[LayerAnnotationCacheVersion] != rc.version {
+				logrus.WithError(err).Warnf("ignore cache %s, unmatched version: %s, expected: %s", rc.Ref,
+					targetManifest.Annotations[LayerAnnotationCacheVersion], rc.version)
+				continue
+			}
 			targetManifests = append(targetManifests, targetManifest)
-
 		}
 		for _, manifest := range targetManifests {
 			for _, targetDesc := range manifest.Layers {
@@ -386,6 +395,11 @@ func (rc *RemoteCache) update(ctx context.Context, orgDesc, newDesc, cacheDesc *
 						return nil, errors.Wrap(err, "read cache manifest")
 					}
 					manifest.Layers = appendLayers(manifest.Layers, layers, rc.size)
+					// append LayerAnnotationCacheVersion to manifest annotations
+					if manifest.Annotations == nil {
+						manifest.Annotations = map[string]string{}
+					}
+					manifest.Annotations[LayerAnnotationCacheVersion] = rc.version
 					newManiDesc, err := utils.WriteJSON(ctx, rc.provider.ContentStore(), manifest, maniDesc, "", nil)
 					if err != nil {
 						return nil, errors.Wrap(err, "write cache manifest")
@@ -406,6 +420,9 @@ func (rc *RemoteCache) update(ctx context.Context, orgDesc, newDesc, cacheDesc *
 			MediaType: ocispec.MediaTypeImageManifest,
 			Config:    *imageConfigDesc,
 			Layers:    layers,
+			Annotations: map[string]string{
+				LayerAnnotationCacheVersion: rc.version,
+			},
 		}
 		manifestDesc, err := utils.WriteJSON(ctx, rc.provider.ContentStore(), manifest, ocispec.Descriptor{}, "", nil)
 		if err != nil {

@@ -48,10 +48,11 @@ type MetricConfig struct {
 }
 
 type ProviderConfig struct {
-	Source    map[string]SourceConfig `yaml:"source"`
-	WorkDir   string                  `yaml:"work_dir"`
-	GCPolicy  GCPolicy                `yaml:"gcpolicy"`
-	CacheSize int                     `yaml:"cache_size"`
+	Source       map[string]SourceConfig `yaml:"source"`
+	WorkDir      string                  `yaml:"work_dir"`
+	GCPolicy     GCPolicy                `yaml:"gcpolicy"`
+	CacheSize    int                     `yaml:"cache_size"`
+	CacheVersion string                  `yaml:"cache_version"`
 }
 
 type GCPolicy struct {
