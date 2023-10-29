@@ -149,7 +149,7 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 // https://github.com/containerd/containerd/blob/main/remotes/handlers.go
 func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher) images.HandlerFunc {
 	return func(ctx context.Context, desc ocispec.Descriptor) (subdescs []ocispec.Descriptor, err error) {
-		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
+		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{ // nolint:staticcheck
 			"digest":    desc.Digest,
 			"mediatype": desc.MediaType,
 			"size":      desc.Size,

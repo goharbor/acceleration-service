@@ -17,7 +17,6 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -88,7 +87,7 @@ type DriverConfig struct {
 }
 
 func Parse(configPath string) (*Config, error) {
-	bytes, err := ioutil.ReadFile(configPath)
+	bytes, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "load config: %s", configPath)
 	}
