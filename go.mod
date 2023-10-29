@@ -1,28 +1,28 @@
 module github.com/goharbor/acceleration-service
 
-go 1.18
+go 1.20
 
 require (
-	github.com/containerd/containerd v1.7.6
-	github.com/containerd/nydus-snapshotter v0.13.2
+	github.com/containerd/containerd v1.7.8
+	github.com/containerd/nydus-snapshotter v0.13.3
 	github.com/containerd/stargz-snapshotter v0.14.3
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3
-	github.com/docker/cli v24.0.6+incompatible
+	github.com/docker/cli v24.0.7+incompatible
 	github.com/dustin/go-humanize v1.0.1
-	github.com/google/uuid v1.3.0
-	github.com/hashicorp/golang-lru/v2 v2.0.5
+	github.com/google/uuid v1.4.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/labstack/echo-contrib v0.15.0
-	github.com/labstack/echo/v4 v4.11.1
+	github.com/labstack/echo/v4 v4.11.2
 	github.com/labstack/gommon v0.4.0
 	github.com/opencontainers/go-digest v1.0.0
-	github.com/opencontainers/image-spec v1.1.0-rc4
+	github.com/opencontainers/image-spec v1.1.0-rc5
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.16.0
-	github.com/sirupsen/logrus v1.9.0
-	github.com/stretchr/testify v1.8.3
+	github.com/prometheus/client_golang v1.17.0
+	github.com/sirupsen/logrus v1.9.3
+	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli/v2 v2.25.7
-	go.etcd.io/bbolt v1.3.7
-	golang.org/x/sync v0.3.0
+	go.etcd.io/bbolt v1.3.8
+	golang.org/x/sync v0.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -30,7 +30,7 @@ require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/Microsoft/hcsshim v0.11.0 // indirect
+	github.com/Microsoft/hcsshim v0.11.1 // indirect
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible // indirect
 	github.com/aws/aws-sdk-go-v2 v1.17.6 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
@@ -56,6 +56,7 @@ require (
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/continuity v0.4.2 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
+	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/containers/ocicrypt v1.1.7 // indirect
@@ -86,9 +87,9 @@ require (
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.3.0 // indirect
-	github.com/prometheus/common v0.42.0 // indirect
-	github.com/prometheus/procfs v0.10.1 // indirect
+	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
+	github.com/prometheus/common v0.44.0 // indirect
+	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/stefanberger/go-pkcs11uri v0.0.0-20201008174630-78d3cae3a980 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -99,16 +100,17 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
-	golang.org/x/crypto v0.11.0 // indirect
-	golang.org/x/mod v0.9.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/term v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/mod v0.11.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/term v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.7.0 // indirect
-	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
-	google.golang.org/grpc v1.55.0 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
+	golang.org/x/tools v0.10.0 // indirect
+	google.golang.org/genproto v0.0.0-20230711160842-782d3b101e98 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
+	google.golang.org/grpc v1.58.3 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
