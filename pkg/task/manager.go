@@ -114,11 +114,7 @@ func (m *manager) updateBucket(task *Task) error {
 			return err
 		}
 
-		if err := bucket.Put([]byte(task.ID), taskJSON); err != nil {
-			return err
-		}
-
-		return nil
+		return bucket.Put([]byte(task.ID), taskJSON)
 	})
 }
 

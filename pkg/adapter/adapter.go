@@ -173,7 +173,7 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 	return nil
 }
 
-func (adp *LocalAdapter) CheckHealth(ctx context.Context) error {
+func (adp *LocalAdapter) CheckHealth(_ context.Context) error {
 	_, err := adp.content.Size()
 	return err
 }

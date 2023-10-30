@@ -151,9 +151,8 @@ func UnpackFile(reader io.Reader, source, target string) error {
 		if err != nil {
 			if err == io.EOF {
 				break
-			} else {
-				return err
 			}
+			return err
 		}
 		if hdr.Name == source {
 			file, err := os.Create(target)

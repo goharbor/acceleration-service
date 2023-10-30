@@ -61,7 +61,7 @@ func NewLocalHandler(cfg *config.Config) (*LocalHandler, error) {
 	return handler, nil
 }
 
-func (handler *LocalHandler) Auth(ctx context.Context, host string, authHeader string) error {
+func (handler *LocalHandler) Auth(_ context.Context, host string, authHeader string) error {
 	if authHeader != "" {
 		source := handler.cfg.Provider.Source[host]
 		if authHeader != source.Webhook.AuthHeader {

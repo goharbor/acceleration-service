@@ -8,8 +8,6 @@ on:
 jobs:
   release_image:
     runs-on: ubuntu-20.04
-    env:
-      GO_VERSION: 1.18
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -60,13 +58,12 @@ jobs:
       matrix:
         arch: [amd64, arm64]
     env:
-      GO_VERSION: 1.18
       OUTPUT_DIR: ${{ github.workspace }}/out
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - name: Run Linter
         run: |
           make install-check-tools

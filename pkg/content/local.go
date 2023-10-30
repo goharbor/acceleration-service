@@ -109,7 +109,7 @@ func (pvd *LocalProvider) Push(ctx context.Context, desc ocispec.Descriptor, ref
 	return push(ctx, pvd.ContentStore(), rc, desc, ref)
 }
 
-func (pvd *LocalProvider) Image(ctx context.Context, ref string) (*ocispec.Descriptor, error) {
+func (pvd *LocalProvider) Image(_ context.Context, ref string) (*ocispec.Descriptor, error) {
 	return pvd.getImage(ref)
 }
 

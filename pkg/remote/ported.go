@@ -42,7 +42,7 @@ const maxRetry = 3
 // Modified from containerd project, copyright The containerd Authors.
 // https://github.com/containerd/containerd/remotes/docker/fetcher.go
 func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, host HostFunc, plainHTTP bool) (content.ReaderAt, error) {
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("digest", desc.Digest))
+	ctx = log.WithLogger(ctx, log.G(ctx).WithField("digest", desc.Digest)) // nolint:staticcheck
 
 	refspec, err := reference.Parse(cacheRef)
 	if err != nil {
@@ -91,15 +91,16 @@ func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, host H
 		for _, us := range desc.URLs {
 			u, err := url.Parse(us)
 			if err != nil {
-				log.G(ctx).WithError(err).Debugf("failed to parse %q", us)
+				log.G(ctx).WithError(err).Debugf("failed to parse %q", us) // nolint:staticcheck
 				continue
 			}
 			if u.Scheme != "http" && u.Scheme != "https" {
-				log.G(ctx).Debug("non-http(s) alternative url is unsupported")
+				log.G(ctx).Debug("non-http(s) alternative url is unsupported") // nolint:staticcheck
 				continue
 			}
-			ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u))
-			log.G(ctx).Info("request")
+
+			ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u)) // nolint:staticcheck
+			log.G(ctx).Info("request")                                // nolint:staticcheck
 
 			// Try this first, parse it
 			host := docker.RegistryHost{
@@ -251,7 +252,7 @@ func (hrs *httpReadSeeker) Read(p []byte) (n int, err error) {
 		}
 		if hrs.rc != nil {
 			if clsErr := hrs.rc.Close(); clsErr != nil {
-				log.L.WithError(clsErr).Error("httpReadSeeker: failed to close ReadCloser")
+				log.L.WithError(clsErr).Error("httpReadSeeker: failed to close ReadCloser") // nolint:staticcheck
 			}
 			hrs.rc = nil
 		}
@@ -301,7 +302,7 @@ func (hrs *httpReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	if abs != hrs.offset {
 		if hrs.rc != nil {
 			if err := hrs.rc.Close(); err != nil {
-				log.L.WithError(err).Error("Fetcher.Seek: failed to close ReadCloser")
+				log.L.WithError(err).Error("Fetcher.Seek: failed to close ReadCloser") // nolint:staticcheck
 			}
 
 			hrs.rc = nil
@@ -332,7 +333,7 @@ func (hrs *httpReadSeeker) reader() (io.Reader, error) {
 
 		if hrs.rc != nil {
 			if err := hrs.rc.Close(); err != nil {
-				log.L.WithError(err).Error("httpReadSeeker: failed to close ReadCloser")
+				log.L.WithError(err).Error("httpReadSeeker: failed to close ReadCloser") // nolint:staticcheck
 			}
 		}
 		hrs.rc = rc
@@ -475,7 +476,7 @@ func (r *request) do(ctx context.Context) (*http.Response, error) {
 		}
 	}
 
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u))
+	ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u)) // nolint:staticcheck
 	if err := r.authorize(ctx, req); err != nil {
 		return nil, fmt.Errorf("failed to authorize: %w", err)
 	}
@@ -569,7 +570,7 @@ func (r *request) retryRequest(ctx context.Context, responses []*http.Response) 
 	last := responses[len(responses)-1]
 	switch last.StatusCode {
 	case http.StatusUnauthorized:
-		log.G(ctx).WithField("header", last.Header.Get("WWW-Authenticate")).Debug("Unauthorized")
+		log.G(ctx).WithField("header", last.Header.Get("WWW-Authenticate")).Debug("Unauthorized") // nolint:staticcheck
 		if r.host.Authorizer != nil {
 			if err := r.host.Authorizer.AddResponses(ctx, responses); err == nil {
 				return true, nil

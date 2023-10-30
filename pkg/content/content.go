@@ -338,7 +338,7 @@ type localWriter struct {
 	content *Content
 }
 
-func (localWriter localWriter) Commit(ctx context.Context, size int64, expected digest.Digest, opts ...ctrcontent.Opt) error {
+func (localWriter localWriter) Commit(ctx context.Context, size int64, expected digest.Digest, _ ...ctrcontent.Opt) error {
 	// we don't write any lables, drop the opts
 	localWriter.content.updateLease(&expected)
 	return localWriter.Writer.Commit(ctx, size, expected)
