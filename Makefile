@@ -2,6 +2,9 @@ VERSION_TAG=$(shell git describe --match 'v[0-9]*' --dirty='.m' --always --tags)
 GIT_COMMIT := $(shell git rev-list -1 HEAD)
 BUILD_TIME := $(shell date -u +%Y%m%d.%H%M)
 
+ACCELD_CONFIG ?= misc/config/config.nydus.yaml
+ACCELD_SYSTEMD_UNIT_SERVICE ?= misc/acceleration-daemon.service
+
 default: build
 
 # Build binary to ./
@@ -31,3 +34,15 @@ test: default ut smoke
 
 release-image:
 	docker build -t goharbor/harbor-acceld -f script/release/Dockerfile .
+
+install:
+	@echo "+ $@ ./acceld"
+	@if [ ! -d /usr/local/bin ]; then mkdir -p /usr/local/bin; fi
+	@sudo install -D -m 755 ./acceld /usr/local/bin/acceld
+
+	@if [ ! -d /etc/acceld ]; then mkdir -p /etc/acceld; fi
+	@if [ ! -e /etc/acceld/config.yaml ]; then echo "+ $@ ${ACCELD_CONFIG}"; sudo install -D -m 664 ${ACCELD_CONFIG} /etc/acceld/config.yaml ; fi
+
+	@echo "+ $@ ${ACCELD_SYSTEMD_UNIT_SERVICE}"
+	@sudo install -D -m 644 ${ACCELD_SYSTEMD_UNIT_SERVICE} /etc/systemd/system/acceleration-daemon.service
+	@if which systemctl >/dev/null; then sudo systemctl enable /etc/systemd/system/acceleration-daemon.service; sudo systemctl restart acceleration-daemon; fi
