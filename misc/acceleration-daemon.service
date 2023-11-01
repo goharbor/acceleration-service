@@ -1,0 +1,17 @@
+[Unit]
+Description=Acceleration Service Daemon
+After=network.target
+
+[Service]
+Type=simple
+Environment=HOME=/root
+ExecStart=/usr/local/bin/acceld --config /etc/acceld/config.yaml
+Restart=always
+RestartSec=1
+KillMode=process
+OOMScoreAdjust=-999
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

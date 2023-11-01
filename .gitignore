@@ -17,3 +17,5 @@
 /misc/config/config.yaml
 /acceld
 /accelctl
+# systemd service log
+*.log
