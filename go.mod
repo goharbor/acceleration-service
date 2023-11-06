@@ -6,7 +6,7 @@ require (
 	github.com/containerd/containerd v1.7.8
 	github.com/containerd/nydus-snapshotter v0.13.3
 	github.com/containerd/stargz-snapshotter v0.14.3
-	github.com/containerd/stargz-snapshotter/estargz v0.14.3
+	github.com/containerd/stargz-snapshotter/estargz v0.15.1
 	github.com/docker/cli v24.0.7+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/uuid v1.4.0
@@ -73,7 +73,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.16.0 // indirect
+	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
@@ -94,7 +94,7 @@ require (
 	github.com/stefanberger/go-pkcs11uri v0.0.0-20201008174630-78d3cae3a980 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	github.com/vbatts/tar-split v0.11.2 // indirect
+	github.com/vbatts/tar-split v0.11.5 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.mozilla.org/pkcs7 v0.0.0-20200128120323-432b2356ecb1 // indirect
 	go.opencensus.io v0.24.0 // indirect
