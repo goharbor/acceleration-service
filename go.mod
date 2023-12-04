@@ -3,7 +3,7 @@ module github.com/goharbor/acceleration-service
 go 1.20
 
 require (
-	github.com/containerd/containerd v1.7.9
+	github.com/containerd/containerd v1.7.10
 	github.com/containerd/nydus-snapshotter v0.13.3
 	github.com/containerd/stargz-snapshotter v0.14.3
 	github.com/containerd/stargz-snapshotter/estargz v0.15.1
