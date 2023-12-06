@@ -9,8 +9,6 @@ on:
     paths-ignore: [ '**.md']
 
 env:
-  HARBOR_VERSION: 2.8.4
-  NYDUS_VERSION: 2.2.3
   OCI_IMAGE_NAME: redis
 
 jobs:
@@ -67,8 +65,9 @@ jobs:
 
     - name: Install Harbor
       run: |
-        wget https://github.com/goharbor/harbor/releases/download/v${{ env.HARBOR_VERSION }}/harbor-offline-installer-v${{ env.HARBOR_VERSION }}.tgz
-        tar xzvf harbor-offline-installer-v${{ env.HARBOR_VERSION }}.tgz
+        HARBOR_VERION=$(curl https://api.github.com/repos/goharbor/harbor/releases/latest | jq -r '.tag_name')
+        wget https://github.com/goharbor/harbor/releases/download/${HARBOR_VERION}/harbor-offline-installer-${HARBOR_VERION}.tgz
+        tar xzvf harbor-offline-installer-${HARBOR_VERION}.tgz
         cp ./script/integration/harbor.yml harbor/harbor.yml
         cd harbor
         sudo ./install.sh
@@ -84,8 +83,9 @@ jobs:
       run: |
         chmod +x accel*
         # Download nydus components
-        wget https://github.com/dragonflyoss/image-service/releases/download/v${{ env.NYDUS_VERSION }}/nydus-static-v${{ env.NYDUS_VERSION }}-linux-amd64.tgz
-        sudo tar xzvf nydus-static-v${{ env.NYDUS_VERSION }}-linux-amd64.tgz --wildcards --strip-components=1 -C /usr/bin/ nydus-static/*
+        NYDUS_VERSION=$(curl https://api.github.com/repos/Dragonflyoss/nydus/releases/latest | jq -r '.tag_name')
+        wget https://github.com/dragonflyoss/image-service/releases/download/${NYDUS_VERSION}/nydus-static-${NYDUS_VERSION}-linux-amd64.tgz
+        sudo tar xzvf nydus-static-${NYDUS_VERSION}-linux-amd64.tgz --wildcards --strip-components=1 -C /usr/bin/ nydus-static/*
         ./script/integration/nydus/test.sh ${{ env.OCI_IMAGE_NAME }}
 
     - name: Test eStargz Driver
