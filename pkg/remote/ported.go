@@ -29,10 +29,10 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/reference"
 	docker "github.com/containerd/containerd/remotes/docker"
 	"github.com/containerd/containerd/tracing"
+	"github.com/containerd/log"
 	acceldErrdefs "github.com/goharbor/acceleration-service/pkg/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -42,7 +42,7 @@ const maxRetry = 3
 // Modified from containerd project, copyright The containerd Authors.
 // https://github.com/containerd/containerd/remotes/docker/fetcher.go
 func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, host HostFunc, plainHTTP bool) (content.ReaderAt, error) {
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("digest", desc.Digest)) // nolint:staticcheck
+	ctx = log.WithLogger(ctx, log.G(ctx).WithField("digest", desc.Digest))
 
 	refspec, err := reference.Parse(cacheRef)
 	if err != nil {
@@ -91,16 +91,16 @@ func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, host H
 		for _, us := range desc.URLs {
 			u, err := url.Parse(us)
 			if err != nil {
-				log.G(ctx).WithError(err).Debugf("failed to parse %q", us) // nolint:staticcheck
+				log.G(ctx).WithError(err).Debugf("failed to parse %q", us)
 				continue
 			}
 			if u.Scheme != "http" && u.Scheme != "https" {
-				log.G(ctx).Debug("non-http(s) alternative url is unsupported") // nolint:staticcheck
+				log.G(ctx).Debug("non-http(s) alternative url is unsupported")
 				continue
 			}
 
-			ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u)) // nolint:staticcheck
-			log.G(ctx).Info("request")                                // nolint:staticcheck
+			ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u))
+			log.G(ctx).Info("request")
 
 			// Try this first, parse it
 			host := docker.RegistryHost{
@@ -252,7 +252,7 @@ func (hrs *httpReadSeeker) Read(p []byte) (n int, err error) {
 		}
 		if hrs.rc != nil {
 			if clsErr := hrs.rc.Close(); clsErr != nil {
-				log.L.WithError(clsErr).Error("httpReadSeeker: failed to close ReadCloser") // nolint:staticcheck
+				log.L.WithError(clsErr).Error("httpReadSeeker: failed to close ReadCloser")
 			}
 			hrs.rc = nil
 		}
@@ -302,7 +302,7 @@ func (hrs *httpReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	if abs != hrs.offset {
 		if hrs.rc != nil {
 			if err := hrs.rc.Close(); err != nil {
-				log.L.WithError(err).Error("Fetcher.Seek: failed to close ReadCloser") // nolint:staticcheck
+				log.L.WithError(err).Error("Fetcher.Seek: failed to close ReadCloser")
 			}
 
 			hrs.rc = nil
@@ -333,7 +333,7 @@ func (hrs *httpReadSeeker) reader() (io.Reader, error) {
 
 		if hrs.rc != nil {
 			if err := hrs.rc.Close(); err != nil {
-				log.L.WithError(err).Error("httpReadSeeker: failed to close ReadCloser") // nolint:staticcheck
+				log.L.WithError(err).Error("httpReadSeeker: failed to close ReadCloser")
 			}
 		}
 		hrs.rc = rc
@@ -476,7 +476,7 @@ func (r *request) do(ctx context.Context) (*http.Response, error) {
 		}
 	}
 
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u)) // nolint:staticcheck
+	ctx = log.WithLogger(ctx, log.G(ctx).WithField("url", u))
 	if err := r.authorize(ctx, req); err != nil {
 		return nil, fmt.Errorf("failed to authorize: %w", err)
 	}
@@ -496,18 +496,11 @@ func (r *request) do(ctx context.Context) (*http.Response, error) {
 			return nil
 		}
 	}
-	_, httpSpan := tracing.StartSpan(
-		ctx,
-		tracing.Name("remotes.docker.resolver", "HTTPRequest"),
-		tracing.WithHTTPRequest(req),
-	)
-	defer httpSpan.End()
+	tracing.UpdateHTTPClient(client, tracing.Name("remotes.docker.resolver", "HTTPRequest"))
 	resp, err := client.Do(req)
 	if err != nil {
-		httpSpan.SetStatus(err)
 		return nil, fmt.Errorf("failed to do request: %w", err)
 	}
-	httpSpan.SetAttributes(tracing.HTTPStatusCodeAttributes(resp.StatusCode)...)
 	return resp, nil
 }
 
@@ -570,7 +563,7 @@ func (r *request) retryRequest(ctx context.Context, responses []*http.Response) 
 	last := responses[len(responses)-1]
 	switch last.StatusCode {
 	case http.StatusUnauthorized:
-		log.G(ctx).WithField("header", last.Header.Get("WWW-Authenticate")).Debug("Unauthorized") // nolint:staticcheck
+		log.G(ctx).WithField("header", last.Header.Get("WWW-Authenticate")).Debug("Unauthorized")
 		if r.host.Authorizer != nil {
 			if err := r.host.Authorizer.AddResponses(ctx, responses); err == nil {
 				return true, nil

@@ -25,10 +25,10 @@ import (
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/log"
 
 	// nolint:staticcheck
 	"github.com/containerd/containerd/remotes/docker/schema1"
@@ -149,7 +149,7 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 // https://github.com/containerd/containerd/blob/main/remotes/handlers.go
 func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher) images.HandlerFunc {
 	return func(ctx context.Context, desc ocispec.Descriptor) (subdescs []ocispec.Descriptor, err error) {
-		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{ // nolint:staticcheck
+		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
 			"digest":    desc.Digest,
 			"mediatype": desc.MediaType,
 			"size":      desc.Size,
