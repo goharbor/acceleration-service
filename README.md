@@ -4,6 +4,7 @@ Acceleration Service provides a general service to Harbor with the ability to au
 [eStargz](https://github.com/containerd/stargz-snapshotter), etc. drivers.
 
 [![Release Version](https://img.shields.io/github/v/release/goharbor/acceleration-service?style=flat)](https://github.com/goharbor/acceleration-service/releases)
+[![Docker Pulls](https://img.shields.io/docker/pulls/goharbor/harbor-acceld.svg)](https://hub.docker.com/r/goharbor/harbor-acceld/)
 [![Integration Test](https://github.com/goharbor/acceleration-service/actions/workflows/integration-test.yml/badge.svg?branch=main)](https://github.com/goharbor/acceleration-service/actions/workflows/integration-test.yml)
 [![Concurrent Test](https://github.com/goharbor/acceleration-service/actions/workflows/concurrent-test.yml/badge.svg?branch=main)](https://github.com/goharbor/acceleration-service/actions/workflows/concurrent-test.yml)
 [![Webhook Test](https://github.com/goharbor/acceleration-service/actions/workflows/webhook-test.yml/badge.svg?branch=main)](https://github.com/goharbor/acceleration-service/actions/workflows/webhook-test.yml)
