@@ -44,7 +44,7 @@ jobs:
         make
 
     - name: Upload Accel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: accel-artifact
         path: |
