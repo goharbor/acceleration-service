@@ -3,7 +3,7 @@ module github.com/goharbor/acceleration-service
 go 1.20
 
 require (
-	github.com/containerd/containerd v1.7.11
+	github.com/containerd/containerd v1.7.12
 	github.com/containerd/log v0.1.0
 	github.com/containerd/nydus-snapshotter v0.13.4
 	github.com/containerd/stargz-snapshotter v0.15.1
@@ -84,7 +84,7 @@ require (
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
-	github.com/opencontainers/runc v1.1.5 // indirect
+	github.com/moby/sys/user v0.1.0 // indirect
 	github.com/opencontainers/runtime-spec v1.1.0 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
