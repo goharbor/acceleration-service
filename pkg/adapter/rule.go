@@ -34,12 +34,19 @@ const (
 // Source: 192.168.1.1/nginx:latest
 // Target: 192.168.1.1/nginx:latest-suffix
 func addSuffix(ref, suffix string) (string, error) {
-	named, err := docker.ParseDockerRef(ref)
+	named, err := docker.ParseNormalizedNamed(ref)
 	if err != nil {
 		return "", errors.Wrap(err, "invalid source image reference")
 	}
 	if _, ok := named.(docker.Digested); ok {
-		return "", fmt.Errorf("unsupported digested image reference: %s", named.String())
+		if _, ok := named.(docker.NamedTagged); ok {
+			named, err = docker.WithTag(docker.TrimNamed(named), named.(docker.NamedTagged).Tag())
+			if err != nil {
+				return "", errors.Wrap(err, "invalid source image reference")
+			}
+		} else {
+			named = docker.TrimNamed(named)
+		}
 	}
 	named = docker.TagNameOnly(named)
 	target := named.String() + suffix
@@ -50,12 +57,19 @@ func addSuffix(ref, suffix string) (string, error) {
 // Source:192.168.1.1/nginx:latest
 // Target:192.168.1.1/nginx:tag
 func setReferenceTag(ref, tag string) (string, error) {
-	named, err := docker.ParseDockerRef(ref)
+	named, err := docker.ParseNormalizedNamed(ref)
 	if err != nil {
 		return "", errors.Wrap(err, "invalid source image reference")
 	}
 	if _, ok := named.(docker.Digested); ok {
-		return "", fmt.Errorf("unsupported digested image reference: %s", named.String())
+		if _, ok := named.(docker.NamedTagged); ok {
+			named, err = docker.WithTag(docker.TrimNamed(named), named.(docker.NamedTagged).Tag())
+			if err != nil {
+				return "", errors.Wrap(err, "invalid source image reference")
+			}
+		} else {
+			named = docker.TrimNamed(named)
+		}
 	}
 	if tagged, ok := named.(docker.NamedTagged); ok && tagged.Tag() == tag {
 		return "", errdefs.ErrSameTag
