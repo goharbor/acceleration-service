@@ -48,7 +48,7 @@ Get `accelctl` and `acceld` binaries from [acceleration-service release](https:/
     generate a base64 encoded auth string like this:
 
     ```bash
-    $ echo '<robot-name>:<robot-secret>' | base64
+    $ echo -n '<robot-name>:<robot-secret>' | base64
     ```
     > Note: the encoded auth string will be used in configuring acceleration service on the next step.
 
