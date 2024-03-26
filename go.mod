@@ -3,7 +3,7 @@ module github.com/goharbor/acceleration-service
 go 1.21
 
 require (
-	github.com/containerd/containerd v1.7.12
+	github.com/containerd/containerd v1.7.14
 	github.com/containerd/log v0.1.0
 	github.com/containerd/nydus-snapshotter v0.13.9
 	github.com/containerd/stargz-snapshotter v0.15.1
@@ -57,7 +57,7 @@ require (
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/continuity v0.4.3 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
-	github.com/containerd/ttrpc v1.2.2 // indirect
+	github.com/containerd/ttrpc v1.2.3 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/containers/ocicrypt v1.1.7 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
