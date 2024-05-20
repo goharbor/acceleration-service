@@ -8,7 +8,7 @@ require (
 	github.com/containerd/nydus-snapshotter v0.13.11
 	github.com/containerd/stargz-snapshotter v0.15.1
 	github.com/containerd/stargz-snapshotter/estargz v0.15.1
-	github.com/docker/cli v26.0.0+incompatible
+	github.com/docker/cli v26.1.3+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
