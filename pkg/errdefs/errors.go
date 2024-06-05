@@ -21,7 +21,7 @@ var (
 	ErrSameTag          = errors.New("ERR_SAME_TAG")
 )
 
-// IsErrHTTPResponseToHTTPSClient returns whether err is
+// isErrHTTPResponseToHTTPSClient returns whether err is
 // "http: server gave HTTP response to HTTPS client"
 func isErrHTTPResponseToHTTPSClient(err error) bool {
 	// The error string is unexposed as of Go 1.16, so we can't use `errors.Is`.
@@ -30,15 +30,21 @@ func isErrHTTPResponseToHTTPSClient(err error) bool {
 	return strings.Contains(err.Error(), unexposed)
 }
 
-// IsErrConnectionRefused return whether err is
+// isErrConnectionRefused return whether err is
 // "connect: connection refused"
 func isErrConnectionRefused(err error) bool {
 	const errMessage = "connect: connection refused"
 	return strings.Contains(err.Error(), errMessage)
 }
 
+// isErrTimeout return whether err is "timeout"
+func isErrTimeout(err error) bool {
+	const errMessage = "timeout"
+	return strings.Contains(err.Error(), errMessage)
+}
+
 func NeedsRetryWithHTTP(err error) bool {
-	return err != nil && (isErrHTTPResponseToHTTPSClient(err) || isErrConnectionRefused(err))
+	return err != nil && (isErrHTTPResponseToHTTPSClient(err) || isErrConnectionRefused(err) || isErrTimeout(err))
 }
 
 func isErrInconsistentNydusLayer(err error) bool {
