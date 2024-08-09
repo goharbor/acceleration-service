@@ -45,7 +45,7 @@ jobs:
         make
 
     - name: Upload Accel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: accel-artifact
         path: |
@@ -60,7 +60,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Download Acceld
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: accel-artifact
 
