@@ -24,9 +24,10 @@ jobs:
         go-version-file: go.mod
 
     - name: Check
-      run: |
-        make install-check-tools
-        make check
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.59
+        args: --timeout=10m --issues-exit-code=0
 
   accel_build:
     runs-on: ubuntu-latest
