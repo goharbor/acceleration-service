@@ -25,11 +25,11 @@ import (
 
 	ctrcontent "github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
-	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/metadata/boltutil"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/errdefs"
 	"github.com/dustin/go-humanize"
 
 	"github.com/goharbor/acceleration-service/pkg/cache"
@@ -110,7 +110,7 @@ func (content *Content) Size() (int64, error) {
 		if bucket == nil {
 			return nil
 		}
-		return bucket.ForEach(func(key, value []byte) error {
+		return bucket.ForEach(func(key, _ []byte) error {
 			if subBucket := bucket.Bucket(key); subBucket != nil {
 				size, err := blobSize(subBucket)
 				if err != nil {

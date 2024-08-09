@@ -22,9 +22,9 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/errdefs"
+	"github.com/containerd/platforms"
 	"github.com/goharbor/acceleration-service/pkg/cache"
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/remote"

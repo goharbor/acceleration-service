@@ -19,7 +19,7 @@ import (
 	"strconv"
 
 	"github.com/containerd/containerd/images/converter"
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/containerd/stargz-snapshotter/estargz"
 	estargzconvert "github.com/containerd/stargz-snapshotter/nativeconverter/estargz"
 	"github.com/goharbor/acceleration-service/pkg/content"

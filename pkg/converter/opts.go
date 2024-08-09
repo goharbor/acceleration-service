@@ -15,7 +15,7 @@
 package converter
 
 import (
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/goharbor/acceleration-service/pkg/content"
 )
 

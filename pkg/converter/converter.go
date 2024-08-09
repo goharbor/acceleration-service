@@ -22,9 +22,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	ctrErrdefs "github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/platforms"
-	"github.com/containerd/containerd/reference/docker"
+	ctrErrdefs "github.com/containerd/errdefs"
+	"github.com/containerd/platforms"
+	"github.com/distribution/reference"
 	"github.com/goharbor/acceleration-service/pkg/adapter/annotation"
 	"github.com/goharbor/acceleration-service/pkg/cache"
 	"github.com/goharbor/acceleration-service/pkg/content"
@@ -92,11 +92,11 @@ func (cvt *Converter) pull(ctx context.Context, source string) error {
 
 func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef string) (*Metric, error) {
 	var metric Metric
-	sourceNamed, err := docker.ParseDockerRef(source)
+	sourceNamed, err := reference.ParseDockerRef(source)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse source reference")
 	}
-	targetNamed, err := docker.ParseDockerRef(target)
+	targetNamed, err := reference.ParseDockerRef(target)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse target reference")
 	}

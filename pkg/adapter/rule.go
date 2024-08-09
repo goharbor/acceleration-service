@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/containerd/containerd/reference/docker"
+	"github.com/distribution/reference"
 	"github.com/goharbor/acceleration-service/pkg/config"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/pkg/errors"
@@ -34,21 +34,21 @@ const (
 // Source: 192.168.1.1/nginx:latest
 // Target: 192.168.1.1/nginx:latest-suffix
 func addSuffix(ref, suffix string) (string, error) {
-	named, err := docker.ParseNormalizedNamed(ref)
+	named, err := reference.ParseNormalizedNamed(ref)
 	if err != nil {
 		return "", errors.Wrap(err, "invalid source image reference")
 	}
-	if _, ok := named.(docker.Digested); ok {
-		if _, ok := named.(docker.NamedTagged); ok {
-			named, err = docker.WithTag(docker.TrimNamed(named), named.(docker.NamedTagged).Tag())
+	if _, ok := named.(reference.Digested); ok {
+		if _, ok := named.(reference.NamedTagged); ok {
+			named, err = reference.WithTag(reference.TrimNamed(named), named.(reference.NamedTagged).Tag())
 			if err != nil {
 				return "", errors.Wrap(err, "invalid source image reference")
 			}
 		} else {
-			named = docker.TrimNamed(named)
+			named = reference.TrimNamed(named)
 		}
 	}
-	named = docker.TagNameOnly(named)
+	named = reference.TagNameOnly(named)
 	target := named.String() + suffix
 	return target, nil
 }
@@ -57,21 +57,21 @@ func addSuffix(ref, suffix string) (string, error) {
 // Source:192.168.1.1/nginx:latest
 // Target:192.168.1.1/nginx:tag
 func setReferenceTag(ref, tag string) (string, error) {
-	named, err := docker.ParseNormalizedNamed(ref)
+	named, err := reference.ParseNormalizedNamed(ref)
 	if err != nil {
 		return "", errors.Wrap(err, "invalid source image reference")
 	}
-	if _, ok := named.(docker.Digested); ok {
-		if _, ok := named.(docker.NamedTagged); ok {
-			named, err = docker.WithTag(docker.TrimNamed(named), named.(docker.NamedTagged).Tag())
+	if _, ok := named.(reference.Digested); ok {
+		if _, ok := named.(reference.NamedTagged); ok {
+			named, err = reference.WithTag(reference.TrimNamed(named), named.(reference.NamedTagged).Tag())
 			if err != nil {
 				return "", errors.Wrap(err, "invalid source image reference")
 			}
 		} else {
-			named = docker.TrimNamed(named)
+			named = reference.TrimNamed(named)
 		}
 	}
-	if tagged, ok := named.(docker.NamedTagged); ok && tagged.Tag() == tag {
+	if tagged, ok := named.(reference.NamedTagged); ok && tagged.Tag() == tag {
 		return "", errdefs.ErrSameTag
 	}
 	target := named.Name() + ":" + tag
