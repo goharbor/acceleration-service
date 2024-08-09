@@ -27,11 +27,11 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/reference"
 	docker "github.com/containerd/containerd/remotes/docker"
 	"github.com/containerd/containerd/tracing"
+	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	acceldErrdefs "github.com/goharbor/acceleration-service/pkg/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -61,7 +61,7 @@ func Fetch(ctx context.Context, cacheRef string, desc ocispec.Descriptor, host H
 			),
 		),
 		docker.WithClient(newDefaultClient(insecure)),
-		docker.WithPlainHTTP(func(host string) (bool, error) {
+		docker.WithPlainHTTP(func(_ string) (bool, error) {
 			return plainHTTP, nil
 		}),
 	)
