@@ -87,7 +87,7 @@ func (m *manager) initDatabase() error {
 			return nil
 		}
 
-		return bucket.ForEach(func(k, v []byte) error {
+		return bucket.ForEach(func(_, v []byte) error {
 			var task Task
 			if err := json.Unmarshal(v, &task); err != nil {
 				return err

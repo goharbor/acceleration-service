@@ -86,7 +86,7 @@ func NewResolver(insecure, plainHTTP bool, credFunc CredentialFunc) remotes.Reso
 			),
 		),
 		docker.WithClient(newDefaultClient(insecure)),
-		docker.WithPlainHTTP(func(host string) (bool, error) {
+		docker.WithPlainHTTP(func(_ string) (bool, error) {
 			return plainHTTP, nil
 		}),
 	)

@@ -23,16 +23,16 @@ import (
 	"bytes"
 	"encoding/json"
 
-	ctrErrdefs "github.com/containerd/containerd/errdefs"
+	ctrErrdefs "github.com/containerd/errdefs"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
+	"github.com/containerd/platforms"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/utils"
 	"github.com/opencontainers/go-digest"

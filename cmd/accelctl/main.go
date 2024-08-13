@@ -101,7 +101,7 @@ func main() {
 						Name:    "list",
 						Aliases: []string{"ls"},
 						Usage:   "List image conversion tasks",
-						Action: func(c *cli.Context) error {
+						Action: func(_ *cli.Context) error {
 							tasks, err := ctl.ListTask()
 							if err != nil {
 								return err
