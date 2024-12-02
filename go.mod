@@ -1,6 +1,7 @@
 module github.com/goharbor/acceleration-service
 
 go 1.21
+toolchain go1.22.5
 
 require (
 	github.com/containerd/containerd v1.7.20
@@ -25,7 +26,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.4
-	go.etcd.io/bbolt v1.3.10
+	go.etcd.io/bbolt v1.3.11
 	golang.org/x/sync v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
