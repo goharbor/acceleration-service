@@ -11,7 +11,7 @@ require (
 	github.com/containerd/stargz-snapshotter v0.15.1
 	github.com/containerd/stargz-snapshotter/estargz v0.15.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v27.1.1+incompatible
+	github.com/docker/cli v27.4.0+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
