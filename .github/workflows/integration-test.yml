@@ -93,6 +93,10 @@ jobs:
       run: |
         ./script/integration/estargz/test.sh ${{ env.OCI_IMAGE_NAME }}
 
+    - name: Test eStargz Driver (zstdchunked)
+      run: |
+        ./script/integration/estargz/test-zstdchunked.sh ${{ env.OCI_IMAGE_NAME }}
+
     - name: Test one-time mode
       run: |
         ./script/integration/one-time.sh ${{ env.OCI_IMAGE_NAME }}

@@ -1,0 +1,52 @@
+# Configuration file of Harbor Acceleration Service
+
+# http related config
+server:
+  name: API
+  # listened host for http
+  host: 0.0.0.0
+  # port for http
+  port: 2077
+
+metric:
+  # export metrics on `/metrics` endpoint
+  enabled: true
+
+provider:
+  source:
+    # hostname of harbor service
+    hub.harbor.com:
+      # base64 encoded `<robot-name>:<robot-secret>` for robot
+      # account created in harbor
+      # auth: YTpiCg==
+      # skip verifying server certs for HTTPS source registry
+      insecure: false
+      webhook:
+        # webhook request auth header configured in harbor
+        auth_header: header
+    localhost:
+      # If auth is not provided, it will attempt to read from docker config
+      # auth: YWRtaW46SGFyYm9yMTIzNDU=
+  # work directory of acceld
+  work_dir: /tmp
+  gcpolicy:
+      # size threshold that triggers GC, the oldest used blobs will be reclaimed if exceeds the size.
+      threshold: 1000MB
+
+converter:
+  # number of worker for executing conversion task
+  worker: 5
+  # enable to add harbor specified annotations to converted image for tracking.
+  harbor_annotation: true
+  # only convert images for specific platforms, leave empty for all platforms.
+  # platforms: linux/amd64,linux/arm64
+  driver:
+    # accelerator driver type: `estargz`
+    type: estargz
+    config:
+      docker2oci: true
+      # compress format: `zstdchunked`
+      compression: zstdchunked
+  rules:
+    # add suffix to tag of source image reference as target image reference
+    - tag_suffix: -estargz-zstdchunked

@@ -1,7 +1,7 @@
 # Acceleration Service
 
 Acceleration Service provides a general service to Harbor with the ability to automatically convert user images to accelerated images. When a user does something such as artifact push, Harbor will request the service to complete the corresponding image conversion through its integrated [Nydus](https://github.com/dragonflyoss/image-service),
-[eStargz](https://github.com/containerd/stargz-snapshotter), etc. drivers.
+[eStargz, zstdchunked](https://github.com/containerd/stargz-snapshotter) etc. drivers.
 
 [![Release Version](https://img.shields.io/github/v/release/goharbor/acceleration-service?style=flat)](https://github.com/goharbor/acceleration-service/releases)
 [![Docker Pulls](https://img.shields.io/docker/pulls/goharbor/harbor-acceld.svg)](https://hub.docker.com/r/goharbor/harbor-acceld/)
