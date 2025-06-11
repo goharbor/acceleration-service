@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
-	ctrcontent "github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/content/local"
-	"github.com/containerd/containerd/leases"
-	"github.com/containerd/containerd/metadata"
-	"github.com/containerd/containerd/metadata/boltutil"
-	"github.com/containerd/containerd/namespaces"
+	ctrcontent "github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/core/leases"
+	"github.com/containerd/containerd/v2/core/metadata"
+	"github.com/containerd/containerd/v2/core/metadata/boltutil"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
+	"github.com/containerd/containerd/v2/plugins/content/local"
 	"github.com/containerd/errdefs"
 	"github.com/dustin/go-humanize"
 

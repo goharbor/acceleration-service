@@ -20,18 +20,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/content/local"
-	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/remotes"
-	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/core/remotes"
+	"github.com/containerd/containerd/v2/core/remotes/docker"
+	"github.com/containerd/containerd/v2/plugins/content/local"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/containerd/platforms"
 
 	// nolint:staticcheck
-	"github.com/containerd/containerd/remotes/docker/schema1"
+	"github.com/containerd/containerd/v2/core/remotes/docker/schema1"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/semaphore"
@@ -42,7 +42,7 @@ var fetchSingleflight = &singleflight.Group{}
 
 // Ported from containerd project, copyright The containerd Authors.
 // github.com/containerd/containerd/blob/main/pull.go
-func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteContext, ref string, limit int) (images.Image, error) {
+func fetch(ctx context.Context, store content.Store, rCtx *client.RemoteContext, ref string, limit int) (images.Image, error) {
 	name, desc, err := rCtx.Resolver.Resolve(ctx, ref)
 	if err != nil {
 		return images.Image{}, fmt.Errorf("failed to resolve reference %q: %w", ref, err)
@@ -63,7 +63,10 @@ func fetch(ctx context.Context, store content.Store, rCtx *containerd.RemoteCont
 
 	// nolint:staticcheck
 	if desc.MediaType == images.MediaTypeDockerSchema1Manifest && rCtx.ConvertSchema1 {
-		schema1Converter := schema1.NewConverter(store, fetcher)
+		schema1Converter, err := schema1.NewConverter(store, fetcher)
+		if err != nil {
+			return images.Image{}, fmt.Errorf("failed to create schema1 converter: %w", err)
+		}
 
 		handler = images.Handlers(append(rCtx.BaseHandlers, schema1Converter)...)
 
@@ -172,7 +175,7 @@ func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher) images.Han
 
 // Ported from containerd project, copyright The containerd Authors.
 // github.com/containerd/containerd/blob/main/client.go
-func push(ctx context.Context, store content.Store, pushCtx *containerd.RemoteContext, desc ocispec.Descriptor, ref string) error {
+func push(ctx context.Context, store content.Store, pushCtx *client.RemoteContext, desc ocispec.Descriptor, ref string) error {
 	if pushCtx.PlatformMatcher == nil {
 		if len(pushCtx.Platforms) > 0 {
 			var ps []ocispec.Platform
