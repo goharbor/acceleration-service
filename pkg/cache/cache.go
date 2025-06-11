@@ -27,10 +27,10 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/core/remotes"
 	nydusify "github.com/containerd/nydus-snapshotter/pkg/converter"
 	"github.com/containerd/platforms"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
@@ -185,7 +185,7 @@ func (rc *RemoteCache) Fetch(ctx context.Context, platformMC platforms.MatchComp
 	if err != nil {
 		return nil, err
 	}
-	remoteContext := &containerd.RemoteContext{
+	remoteContext := &client.RemoteContext{
 		Resolver:        resolver,
 		PlatformMatcher: platformMC,
 	}

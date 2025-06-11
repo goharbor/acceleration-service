@@ -17,7 +17,7 @@ package parser
 import (
 	"context"
 
-	imageContent "github.com/containerd/containerd/content"
+	imageContent "github.com/containerd/containerd/v2/core/content"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 

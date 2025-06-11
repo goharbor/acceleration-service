@@ -21,8 +21,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/containerd/containerd/leases"
-	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/v2/core/leases"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
