@@ -17,8 +17,8 @@ package content
 import (
 	"context"
 
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/goharbor/acceleration-service/pkg/cache"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
