@@ -29,9 +29,6 @@ import (
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/containerd/platforms"
-
-	// nolint:staticcheck
-	"github.com/containerd/containerd/v2/core/remotes/docker/schema1"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/semaphore"
@@ -41,7 +38,7 @@ import (
 var fetchSingleflight = &singleflight.Group{}
 
 // Ported from containerd project, copyright The containerd Authors.
-// github.com/containerd/containerd/blob/main/pull.go
+// github.com/containerd/containerd/blob/main/client/pull.go
 func fetch(ctx context.Context, store content.Store, rCtx *client.RemoteContext, ref string, limit int) (images.Image, error) {
 	name, desc, err := rCtx.Resolver.Resolve(ctx, ref)
 	if err != nil {
@@ -61,66 +58,56 @@ func fetch(ctx context.Context, store content.Store, rCtx *client.RemoteContext,
 		limiter       *semaphore.Weighted
 	)
 
-	// nolint:staticcheck
-	if desc.MediaType == images.MediaTypeDockerSchema1Manifest && rCtx.ConvertSchema1 {
-		schema1Converter, err := schema1.NewConverter(store, fetcher)
-		if err != nil {
-			return images.Image{}, fmt.Errorf("failed to create schema1 converter: %w", err)
-		}
+	if desc.MediaType == images.MediaTypeDockerSchema1Manifest {
+		return images.Image{}, fmt.Errorf("%w: media type %q is no longer supported since containerd v2.1, please rebuild the image as %q or %q",
+			errdefs.ErrNotImplemented,
+			images.MediaTypeDockerSchema1Manifest, images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest)
+	}
 
-		handler = images.Handlers(append(rCtx.BaseHandlers, schema1Converter)...)
-
-		isConvertible = true
-
-		converterFunc = func(ctx context.Context, _ ocispec.Descriptor) (ocispec.Descriptor, error) {
-			return schema1Converter.Convert(ctx)
-		}
+	// Get all the children for a descriptor
+	childrenHandler := images.ChildrenHandler(store)
+	// Set any children labels for that content
+	childrenHandler = images.SetChildrenMappedLabels(store, childrenHandler, rCtx.ChildLabelMap)
+	if rCtx.AllMetadata {
+		// Filter manifests by platforms but allow to handle manifest
+		// and configuration for not-target platforms
+		childrenHandler = remotes.FilterManifestByPlatformHandler(childrenHandler, rCtx.PlatformMatcher)
 	} else {
-		// Get all the children for a descriptor
-		childrenHandler := images.ChildrenHandler(store)
-		// Set any children labels for that content
-		childrenHandler = images.SetChildrenMappedLabels(store, childrenHandler, rCtx.ChildLabelMap)
-		if rCtx.AllMetadata {
-			// Filter manifests by platforms but allow to handle manifest
-			// and configuration for not-target platforms
-			childrenHandler = remotes.FilterManifestByPlatformHandler(childrenHandler, rCtx.PlatformMatcher)
-		} else {
-			// Filter children by platforms if specified.
-			childrenHandler = images.FilterPlatforms(childrenHandler, rCtx.PlatformMatcher)
-		}
-		// Sort and limit manifests if a finite number is needed
-		if limit > 0 {
-			childrenHandler = images.LimitManifests(childrenHandler, rCtx.PlatformMatcher, limit)
-		}
+		// Filter children by platforms if specified.
+		childrenHandler = images.FilterPlatforms(childrenHandler, rCtx.PlatformMatcher)
+	}
+	// Sort and limit manifests if a finite number is needed
+	if limit > 0 {
+		childrenHandler = images.LimitManifests(childrenHandler, rCtx.PlatformMatcher, limit)
+	}
 
-		// set isConvertible to true if there is application/octet-stream media type
-		convertibleHandler := images.HandlerFunc(
-			func(_ context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-				if desc.MediaType == docker.LegacyConfigMediaType {
-					isConvertible = true
-				}
+	// set isConvertible to true if there is application/octet-stream media type
+	convertibleHandler := images.HandlerFunc(
+		func(_ context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+			if desc.MediaType == docker.LegacyConfigMediaType {
+				isConvertible = true
+			}
 
-				return []ocispec.Descriptor{}, nil
-			},
-		)
+			return []ocispec.Descriptor{}, nil
+		},
+	)
 
-		appendDistSrcLabelHandler, err := docker.AppendDistributionSourceLabel(store, ref)
-		if err != nil {
-			return images.Image{}, err
-		}
+	appendDistSrcLabelHandler, err := docker.AppendDistributionSourceLabel(store, ref)
+	if err != nil {
+		return images.Image{}, err
+	}
 
-		handlers := append(rCtx.BaseHandlers,
-			fetchHandler(store, fetcher),
-			convertibleHandler,
-			childrenHandler,
-			appendDistSrcLabelHandler,
-		)
+	handlers := append(rCtx.BaseHandlers,
+		fetchHandler(store, fetcher),
+		convertibleHandler,
+		childrenHandler,
+		appendDistSrcLabelHandler,
+	)
 
-		handler = images.Handlers(handlers...)
+	handler = images.Handlers(handlers...)
 
-		converterFunc = func(ctx context.Context, desc ocispec.Descriptor) (ocispec.Descriptor, error) {
-			return docker.ConvertManifest(ctx, store, desc)
-		}
+	converterFunc = func(ctx context.Context, desc ocispec.Descriptor) (ocispec.Descriptor, error) {
+		return docker.ConvertManifest(ctx, store, desc)
 	}
 
 	if rCtx.HandlerWrapper != nil {
@@ -174,7 +161,7 @@ func fetchHandler(ingester content.Ingester, fetcher remotes.Fetcher) images.Han
 }
 
 // Ported from containerd project, copyright The containerd Authors.
-// github.com/containerd/containerd/blob/main/client.go
+// github.com/containerd/containerd/blob/main/client/client.go
 func push(ctx context.Context, store content.Store, pushCtx *client.RemoteContext, desc ocispec.Descriptor, ref string) error {
 	if pushCtx.PlatformMatcher == nil {
 		if len(pushCtx.Platforms) > 0 {
