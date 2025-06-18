@@ -35,8 +35,8 @@ import (
 	"github.com/containerd/platforms"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/utils"
-	"github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
+	digest "github.com/opencontainers/go-digest"
+	specs "github.com/opencontainers/image-spec/specs-go"
 	"github.com/pkg/errors"
 )
 

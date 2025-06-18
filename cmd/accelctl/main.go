@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v2"
 
 	"github.com/goharbor/acceleration-service/pkg/client"
 	"github.com/goharbor/acceleration-service/pkg/config"
@@ -34,9 +34,9 @@ var versionBuildTime string
 
 var ctl *client.Client
 
-func ellipsis(txt string, max int) string {
-	if len(txt) > max {
-		return fmt.Sprintf("%s...", txt[0:max])
+func ellipsis(txt string, maximum int) string {
+	if len(txt) > maximum {
+		return fmt.Sprintf("%s...", txt[0:maximum])
 	}
 	return txt
 }

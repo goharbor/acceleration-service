@@ -18,7 +18,7 @@ import (
 	"net/http"
 
 	"github.com/goharbor/acceleration-service/pkg/task"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 )
 
 func (r *LocalRouter) ListTask(ctx echo.Context) error {

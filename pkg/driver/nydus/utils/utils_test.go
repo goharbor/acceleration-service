@@ -18,7 +18,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/opencontainers/go-digest"
+	digest "github.com/opencontainers/go-digest"
 )
 
 func Test_GetRawBootstrapFromV6(t *testing.T) {

@@ -1,21 +1,31 @@
-# https://golangci-lint.run/usage/configuration#config-file
-
+version: "2"
 linters:
   enable:
-    - staticcheck
-    - unconvert
-    - gofmt
-    - goimports
-    - revive
-    - ineffassign
-    - govet
-    - unused
     - misspell
+    - revive
+    - unconvert
   disable:
     - errcheck
-
-run:
-  timeout: 5m
-issues:
-  exclude-dirs:
-    - misc
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - misc
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - misc
+      - third_party$
+      - builtin$
+      - examples$

@@ -14,7 +14,9 @@
 
 package util
 
-import "github.com/labstack/echo/v4"
+import (
+	echo "github.com/labstack/echo/v4"
+)
 
 type ErrorResp struct {
 	Code    string `json:"code"`

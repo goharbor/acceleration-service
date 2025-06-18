@@ -24,7 +24,7 @@ import (
 	"github.com/docker/cli/cli/config"
 	"github.com/goharbor/acceleration-service/pkg/remote"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type Config struct {
