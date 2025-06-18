@@ -18,7 +18,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/opencontainers/go-digest"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 

@@ -117,7 +117,7 @@ func (cvt *Converter) Convert(ctx context.Context, source, target, cacheRef stri
 				if errors.Is(err, ctrErrdefs.ErrNotFound) {
 					logger.Infof("cache %s not found", cacheRef)
 				} else {
-					logger.Warnf(errors.Wrapf(err, "fetch cache %s", cacheRef).Error())
+					logger.Warn(errors.Wrapf(err, "fetch cache %s", cacheRef).Error())
 				}
 			}
 		}

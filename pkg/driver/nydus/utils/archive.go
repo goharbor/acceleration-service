@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 
 	"github.com/containerd/containerd/v2/pkg/archive/compression"
-	"github.com/opencontainers/go-digest"
+	digest "github.com/opencontainers/go-digest"
 )
 
 // PackTargz makes .tar(.gz) stream of file named `name` and returns reader

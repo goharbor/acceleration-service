@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	"github.com/goharbor/acceleration-service/pkg/model"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/server/util"

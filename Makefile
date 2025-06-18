@@ -13,7 +13,7 @@ build:
 	go build -ldflags '-X main.versionTag=${VERSION_TAG} -X main.versionGitCommit=${GIT_COMMIT} -X main.versionBuildTime=${BUILD_TIME}' -gcflags=all="-N -l" ./cmd/accelctl
 
 install-check-tools:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
 
 check:
 	@echo "$@"

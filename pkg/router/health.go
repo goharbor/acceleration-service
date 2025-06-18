@@ -19,7 +19,7 @@ import (
 
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/server/util"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 )
 
 func (r *LocalRouter) CheckHealth(ctx echo.Context) error {

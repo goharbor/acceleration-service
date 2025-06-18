@@ -20,6 +20,11 @@ jobs:
       with:
         go-version-file: go.mod
 
+    - name: Run Linter
+      run: |
+        make install-check-tools
+        make check
+
     - name: Unit Test
       run: |
         go test -v -count=1 ./pkg/...

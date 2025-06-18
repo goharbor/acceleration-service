@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo-contrib/prometheus"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
@@ -135,7 +135,7 @@ func NewHTTPServer(cfg *config.ServerConfig, metricCfg *config.MetricConfig, rou
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
-			logrus.Fatal(errors.Wrapf(err, fmt.Sprintf("[%s] gracefully shutdown http server", cfg.Name)))
+			logrus.Fatal(errors.Wrap(err, fmt.Sprintf("[%s] gracefully shutdown http server", cfg.Name)))
 		}
 	}()
 
