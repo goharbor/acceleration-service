@@ -10,7 +10,7 @@ env:
 
 jobs:
   build_image:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         platform:
@@ -124,7 +124,7 @@ jobs:
           curl -f http://127.0.0.1:2077/api/v1/health
 
   release_binary:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -158,7 +158,7 @@ jobs:
             ${{ env.OUTPUT_DIR }}
 
   upload_binary:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       OUTPUT_DIR: ${{ github.workspace }}/out
     needs: [release_binary]
