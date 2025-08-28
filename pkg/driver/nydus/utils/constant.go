@@ -16,6 +16,7 @@ package utils
 
 const (
 	ManifestOSFeatureNydus   = "nydus.remoteimage.v1"
+	ArtifactTypeNydusImage   = "application/vnd.nydus.image.manifest.v1+json"
 	MediaTypeNydusBlob       = "application/vnd.oci.image.layer.nydus.blob.v1"
 	BootstrapFileNameInLayer = "image/image.boot"
 
