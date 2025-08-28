@@ -352,7 +352,7 @@ func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, n
 		if desc.Platform == nil {
 			desc.Platform = &ocispec.Platform{}
 		}
-		desc.Platform.OSFeatures = []string{nydusutils.ManifestOSFeatureNydus}
+		desc.ArtifactType = nydusutils.ArtifactTypeNydusImage
 		nydusDescs[idx] = desc
 	}
 
