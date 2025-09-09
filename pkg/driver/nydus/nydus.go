@@ -290,6 +290,7 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		OCIRef:           packOpt.OCIRef,
 		Encrypt:          encrypter,
 		WithReferrer:     d.withReferrer,
+		MergeManifest:    d.mergeManifest,
 	}
 	convertHookFunc := func(
 		ctx context.Context, cs content.Store, orgDesc ocispec.Descriptor, newDesc *ocispec.Descriptor,
