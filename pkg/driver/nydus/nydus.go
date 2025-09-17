@@ -15,8 +15,12 @@
 package nydus
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
+	"time"
 
 	"fmt"
 
@@ -41,6 +45,7 @@ import (
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/goharbor/acceleration-service/pkg/errdefs"
 	"github.com/goharbor/acceleration-service/pkg/utils"
+	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -56,6 +61,9 @@ const (
 	annotationFsVersion = "containerd.io/snapshot/nydus-fs-version"
 	// annotationBuilderVersion indicates the nydus builder (nydus-image) version.
 	annotationBuilderVersion = "containerd.io/snapshot/nydus-builder-version"
+	// emptyTarGzipUnpackedDigest is the canonical sha256 digest of empty tar file (1024 NULL bytes).
+	// Can be used as the diffID of an empty layer tar.gz layer.
+	emptyTarGzipUnpackedDigest = digest.Digest("sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef")
 )
 
 var builderVersion string
@@ -344,6 +352,14 @@ func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, n
 	if err != nil {
 		return nil, errors.Wrap(err, "get oci image manifest list")
 	}
+	for idx, desc := range ociDescs {
+		// Modify initial OCI image to prevent layer reuse with non-nydus OCI images
+		desc, err = PrependEmptyLayer(ctx, cs, desc)
+		if err != nil {
+			return nil, errors.Wrap(err, "prepend empty layer")
+		}
+		ociDescs[idx] = desc
+	}
 
 	nydusDescs, err := utils.GetManifests(ctx, cs, nydus, d.platformMC)
 	if err != nil {
@@ -425,4 +441,128 @@ func (d *Driver) getChunkDict(ctx context.Context, provider accelcontent.Provide
 	}
 
 	return &chunkDict, nil
+}
+
+// PrependEmptyLayer modifies the original image manifest and config to prepend an empty layer
+// This is done on purpose to force new shas for all the subsequent layers when unpacked by runtimes
+// So that no layer reuse can be possible between stock OCI images and nydus-converted OCI images
+// It returns the updated manifest descriptor
+func PrependEmptyLayer(ctx context.Context, cs content.Store, manifestDesc ocispec.Descriptor) (ocispec.Descriptor, error) {
+	// Read existing OCI manifest
+	manifestBytes, err := content.ReadBlob(ctx, cs, manifestDesc)
+	if err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "read manifest")
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "unmarshal manifest")
+	}
+
+	// Read existing OCI config
+	configBytes, err := content.ReadBlob(ctx, cs, manifest.Config)
+	if err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "read config")
+	}
+
+	var config ocispec.Image
+	if err := json.Unmarshal(configBytes, &config); err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "unmarshal config")
+	}
+
+	// Rebuild the layer list with an empty layer at the beginning
+	// This will force new shas for all the subsequent layers
+	var (
+		emptyLayerMediaType       string
+		configDescriptorMediaType string
+	)
+
+	switch manifest.MediaType {
+	case ocispec.MediaTypeImageManifest:
+		emptyLayerMediaType = ocispec.MediaTypeImageLayerGzip
+		configDescriptorMediaType = ocispec.MediaTypeImageConfig
+	case images.MediaTypeDockerSchema2Manifest, images.MediaTypeDockerSchema1Manifest:
+		emptyLayerMediaType = images.MediaTypeDockerSchema2LayerGzip
+		configDescriptorMediaType = images.MediaTypeDockerSchema2Config
+	}
+	emptyDescriptorBytes := generateDockerEmptyLayer()
+	emptyDescriptor := ocispec.Descriptor{
+		MediaType: emptyLayerMediaType,
+		Digest:    digest.FromBytes(emptyDescriptorBytes),
+		Size:      int64(len(emptyDescriptorBytes)),
+	}
+
+	manifest.Layers = append([]ocispec.Descriptor{emptyDescriptor}, manifest.Layers...)
+	if manifest.Annotations == nil {
+		manifest.Annotations = map[string]string{}
+	}
+	manifest.Annotations[annotationSourceDigest] = manifestDesc.Digest.String()
+	// Add an empty diff_id at the beginning of the config
+	config.RootFS.DiffIDs = append([]digest.Digest{emptyTarGzipUnpackedDigest}, config.RootFS.DiffIDs...)
+	// Rewrite history to add an entry for the empty layer
+	createdTime := time.Now()
+	emptyLayerHistory := ocispec.History{
+		Created:   &createdTime,
+		CreatedBy: "Nydus Converter",
+		Comment:   "Nydus Empty Layer",
+	}
+	config.History = append([]ocispec.History{emptyLayerHistory}, config.History...)
+
+	newConfigDesc, newConfigBytes, err := nydusutils.MarshalToDesc(config, configDescriptorMediaType)
+	if err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "marshal modified config")
+	}
+	if newConfigDesc.Annotations == nil {
+		newConfigDesc.Annotations = map[string]string{}
+	}
+	newConfigDesc.Annotations[annotationSourceDigest] = manifest.Config.Digest.String()
+
+	manifest.Config = *newConfigDesc
+	newManifestDesc, newManifestBytes, err := nydusutils.MarshalToDesc(manifest, manifest.MediaType)
+	if err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "marshal modified manifest")
+	}
+	// Add back the original information of the manifest descriptor
+	newManifestDesc.Platform = manifestDesc.Platform
+	newManifestDesc.URLs = manifestDesc.URLs
+	newManifestDesc.ArtifactType = manifestDesc.ArtifactType
+	newManifestDesc.Annotations = manifestDesc.Annotations
+
+	if newManifestDesc.Annotations == nil {
+		newManifestDesc.Annotations = map[string]string{}
+	}
+	newManifestDesc.Annotations[annotationSourceDigest] = manifestDesc.Digest.String()
+
+	// Write modified config
+	if err := content.WriteBlob(
+		ctx, cs, newConfigDesc.Digest.String(), bytes.NewReader(newConfigBytes), *newConfigDesc,
+	); err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "write modified config")
+	}
+
+	// Write empty blob
+	if err := content.WriteBlob(
+		ctx, cs, emptyDescriptor.Digest.String(), bytes.NewReader(emptyDescriptorBytes), emptyDescriptor,
+	); err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "write empty json blob")
+	}
+
+	// Write modified manifest
+	if err := content.WriteBlob(
+		ctx, cs, newManifestDesc.Digest.String(), bytes.NewReader(newManifestBytes), *newManifestDesc,
+	); err != nil {
+		return ocispec.Descriptor{}, errors.Wrap(err, "write modified manifest")
+	}
+
+	return *newManifestDesc, nil
+}
+
+// Empty gzip-compressed tar file that can be used as an empty layer content
+func generateDockerEmptyLayer() []byte {
+	var buf bytes.Buffer
+	gzw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gzw)
+	tw.Close()
+	gzw.Close()
+	return buf.Bytes()
 }
