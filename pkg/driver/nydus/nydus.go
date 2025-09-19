@@ -57,6 +57,8 @@ const (
 	annotationSourceDigest = "containerd.io/snapshot/nydus-source-digest"
 	// annotationSourceReference indicates the source OCI image reference name.
 	annotationSourceReference = "containerd.io/snapshot/nydus-source-reference"
+	// annotationEmptyLayer indicates that the layer is an empty layer added by nydus that won't change the final image's content.
+	annotationEmptyLayer = "containerd.io/snapshot/nydus-empty-layer"
 	// annotationFsVersion indicates the fs version (rafs v5/v6) of nydus image.
 	annotationFsVersion = "containerd.io/snapshot/nydus-fs-version"
 	// annotationBuilderVersion indicates the nydus builder (nydus-image) version.
@@ -487,9 +489,10 @@ func PrependEmptyLayer(ctx context.Context, cs content.Store, manifestDesc ocisp
 	}
 	emptyDescriptorBytes := generateDockerEmptyLayer()
 	emptyDescriptor := ocispec.Descriptor{
-		MediaType: emptyLayerMediaType,
-		Digest:    digest.FromBytes(emptyDescriptorBytes),
-		Size:      int64(len(emptyDescriptorBytes)),
+		Annotations: map[string]string{annotationEmptyLayer: "true"},
+		MediaType:   emptyLayerMediaType,
+		Digest:      digest.FromBytes(emptyDescriptorBytes),
+		Size:        int64(len(emptyDescriptorBytes)),
 	}
 
 	manifest.Layers = append([]ocispec.Descriptor{emptyDescriptor}, manifest.Layers...)
