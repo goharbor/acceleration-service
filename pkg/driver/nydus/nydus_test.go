@@ -257,6 +257,7 @@ func verifyPrependResults(ctx context.Context, t *testing.T, cs content.Store, o
 	expectedEmptyDigest := "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1"
 	assert.Equal(t, expectedEmptyDigest, emptyLayer.Digest.String(), "empty layer digest should match expected")
 	assert.Equal(t, int64(32), emptyLayer.Size, "empty layer size should be 32 bytes")
+	assert.Equal(t, "true", emptyLayer.Annotations[annotationEmptyLayer], "empty layer annotation should be set to true")
 
 	// Verify media types based on the original manifest type
 	var expectedEmptyLayerMediaType, expectedconfigDescriptorMediaType string
