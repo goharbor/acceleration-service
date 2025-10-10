@@ -137,7 +137,7 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter
 		}
 		return nil, err
 	}
-	go adp.content.GC(ctx, adp.content.Threshold)
+	go adp.content.GC(context.WithoutCancel(ctx), adp.content.Threshold)
 	return metric, nil
 }
 
