@@ -515,10 +515,6 @@ func PrependEmptyLayer(ctx context.Context, cs content.Store, manifestDesc ocisp
 	if err != nil {
 		return ocispec.Descriptor{}, errors.Wrap(err, "marshal modified config")
 	}
-	if newConfigDesc.Annotations == nil {
-		newConfigDesc.Annotations = map[string]string{}
-	}
-	newConfigDesc.Annotations[annotationSourceDigest] = manifest.Config.Digest.String()
 
 	manifest.Config = *newConfigDesc
 	newManifestDesc, newManifestBytes, err := nydusutils.MarshalToDesc(manifest, manifest.MediaType)
