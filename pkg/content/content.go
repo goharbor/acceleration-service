@@ -176,7 +176,13 @@ func (content *Content) cleanLeases(ctx context.Context, size int64) error {
 			return err
 		}
 		if err := content.db.View(func(tx *bolt.Tx) error {
-			blobsize, err := blobSize(getBlobsBucket(tx).Bucket([]byte(digest)))
+			bucket := getBlobsBucket(tx)
+			// if can't find blob bucket, it means content store is empty
+			if bucket == nil {
+				return nil
+			}
+
+			blobsize, err := blobSize(bucket.Bucket([]byte(digest)))
 			if err != nil {
 				return err
 			}
