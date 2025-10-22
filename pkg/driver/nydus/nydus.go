@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"time"
 
 	"fmt"
 
@@ -503,9 +502,8 @@ func PrependEmptyLayer(ctx context.Context, cs content.Store, manifestDesc ocisp
 	// Add an empty diff_id at the beginning of the config
 	config.RootFS.DiffIDs = append([]digest.Digest{emptyTarGzipUnpackedDigest}, config.RootFS.DiffIDs...)
 	// Rewrite history to add an entry for the empty layer
-	createdTime := time.Now()
+	// No timestamp is added to avoid changing the config digest between 2 conversions of the same image
 	emptyLayerHistory := ocispec.History{
-		Created:   &createdTime,
 		CreatedBy: "Nydus Converter",
 		Comment:   "Nydus Empty Layer",
 	}
