@@ -6,7 +6,7 @@ require (
 	github.com/containerd/containerd/v2 v2.0.2
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/log v0.1.0
-	github.com/containerd/nydus-snapshotter v0.15.3
+	github.com/containerd/nydus-snapshotter v0.15.7
 	github.com/containerd/platforms v1.0.0-rc.1
 	github.com/containerd/stargz-snapshotter v0.16.3
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3
