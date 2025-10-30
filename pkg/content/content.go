@@ -182,7 +182,12 @@ func (content *Content) cleanLeases(ctx context.Context, size int64) error {
 				return nil
 			}
 
-			blobsize, err := blobSize(bucket.Bucket([]byte(digest)))
+			subbucket := bucket.Bucket([]byte(digest))
+			if subbucket == nil {
+				return nil
+			}
+
+			blobsize, err := blobSize(subbucket)
 			if err != nil {
 				return err
 			}
