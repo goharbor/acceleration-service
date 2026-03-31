@@ -220,7 +220,7 @@ func (hrs *httpReadSeeker) ReadAt(p []byte, offset int64) (n int, err error) {
 	if _, err = hrs.Seek(offset, io.SeekStart); err != nil {
 		return 0, err
 	}
-	return hrs.Read(p)
+	return io.ReadFull(hrs, p)
 }
 
 func (hrs *httpReadSeeker) Size() int64 {
