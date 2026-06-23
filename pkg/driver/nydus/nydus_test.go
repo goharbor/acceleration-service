@@ -26,6 +26,8 @@ type testManifest struct {
 	config             ocispec.Image
 	configMediaType    string
 	expectedLayerCount int
+	manifestPlatform   *ocispec.Platform
+	expectedPlatform   *ocispec.Platform
 }
 
 func Test_PrependEmptyLayer(t *testing.T) {
@@ -170,6 +172,67 @@ func Test_PrependEmptyLayer(t *testing.T) {
 			configMediaType:    images.MediaTypeDockerSchema2Config,
 			expectedLayerCount: 1,
 		},
+		{
+			name:      "docker_manifest_nil_platform_derived_from_config",
+			mediaType: images.MediaTypeDockerSchema2Manifest,
+			layers: []ocispec.Descriptor{
+				{
+					MediaType: images.MediaTypeDockerSchema2LayerGzip,
+					Digest:    "sha256:docker-platform-layer-digest",
+					Size:      1500,
+				},
+			},
+			config: ocispec.Image{
+				Platform: ocispec.Platform{
+					OS:           "linux",
+					Architecture: "amd64",
+				},
+				RootFS: ocispec.RootFS{
+					Type:    "layers",
+					DiffIDs: []digest.Digest{"sha256:docker-platform-diff-id"},
+				},
+				History: []ocispec.History{
+					{
+						CreatedBy: "platform layer",
+					},
+				},
+			},
+			configMediaType:    images.MediaTypeDockerSchema2Config,
+			expectedLayerCount: 2,
+			manifestPlatform:   nil,
+			expectedPlatform:   &ocispec.Platform{OS: "linux", Architecture: "amd64"},
+		},
+		{
+			name:      "docker_manifest_non_nil_platform_preserved",
+			mediaType: images.MediaTypeDockerSchema2Manifest,
+			layers: []ocispec.Descriptor{
+				{
+					MediaType: images.MediaTypeDockerSchema2LayerGzip,
+					Digest:    "sha256:docker-preserve-platform-layer-digest",
+					Size:      1500,
+				},
+			},
+			config: ocispec.Image{
+				Platform: ocispec.Platform{
+					OS:           "linux",
+					Architecture: "amd64",
+					Variant:      "v7",
+				},
+				RootFS: ocispec.RootFS{
+					Type:    "layers",
+					DiffIDs: []digest.Digest{"sha256:docker-preserve-platform-diff-id"},
+				},
+				History: []ocispec.History{
+					{
+						CreatedBy: "preserve platform layer",
+					},
+				},
+			},
+			configMediaType:    images.MediaTypeDockerSchema2Config,
+			expectedLayerCount: 2,
+			manifestPlatform:   &ocispec.Platform{OS: "linux", Architecture: "amd64", Variant: "v8"},
+			expectedPlatform:   &ocispec.Platform{OS: "linux", Architecture: "amd64", Variant: "v8"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -193,9 +256,23 @@ func Test_PrependEmptyLayer(t *testing.T) {
 			manifestDesc, err := createManifestBlob(ctx, cs, tt.mediaType, tt.layers, *configDesc)
 			require.NoError(t, err, "failed to create manifest blob")
 
+			// Set platform on the manifest descriptor if specified
+			if tt.manifestPlatform != nil {
+				manifestDesc.Platform = tt.manifestPlatform
+			}
+
 			// Test PrependEmptyLayer
 			newManifestDesc, err := PrependEmptyLayer(ctx, cs, *manifestDesc)
 			require.NoError(t, err, "PrependEmptyLayer should succeed")
+
+			// Verify platform
+			if tt.expectedPlatform != nil {
+				require.NotNil(t, newManifestDesc.Platform, "expected platform should not be nil")
+				assert.Equal(t, tt.expectedPlatform.OS, newManifestDesc.Platform.OS, "platform OS should match")
+				assert.Equal(t, tt.expectedPlatform.Architecture, newManifestDesc.Platform.Architecture, "platform Architecture should match")
+				assert.Equal(t, tt.expectedPlatform.OSVersion, newManifestDesc.Platform.OSVersion, "platform OSVersion should match")
+				assert.Equal(t, tt.expectedPlatform.Variant, newManifestDesc.Platform.Variant, "platform Variant should match")
+			}
 
 			// Verify results
 			verifyPrependResults(ctx, t, cs, *manifestDesc, newManifestDesc, tt.config, tt.expectedLayerCount)

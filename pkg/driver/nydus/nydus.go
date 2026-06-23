@@ -368,7 +368,12 @@ func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, n
 	}
 	for idx, desc := range nydusDescs {
 		if desc.Platform == nil {
-			desc.Platform = &ocispec.Platform{}
+			if idx < len(ociDescs) && ociDescs[idx].Platform != nil {
+				desc.Platform = ociDescs[idx].Platform
+			} else {
+				p := platforms.DefaultSpec()
+				desc.Platform = &p
+			}
 		}
 		desc.ArtifactType = nydusutils.ArtifactTypeNydusImage
 		nydusDescs[idx] = desc
@@ -520,7 +525,16 @@ func PrependEmptyLayer(ctx context.Context, cs content.Store, manifestDesc ocisp
 		return ocispec.Descriptor{}, errors.Wrap(err, "marshal modified manifest")
 	}
 	// Add back the original information of the manifest descriptor
-	newManifestDesc.Platform = manifestDesc.Platform
+	if manifestDesc.Platform == nil {
+		newManifestDesc.Platform = &ocispec.Platform{
+			OS:           config.OS,
+			Architecture: config.Architecture,
+			OSVersion:    config.OSVersion,
+			Variant:      config.Variant,
+		}
+	} else {
+		newManifestDesc.Platform = manifestDesc.Platform
+	}
 	newManifestDesc.URLs = manifestDesc.URLs
 	newManifestDesc.ArtifactType = manifestDesc.ArtifactType
 	newManifestDesc.Annotations = manifestDesc.Annotations
