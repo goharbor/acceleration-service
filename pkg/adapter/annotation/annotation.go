@@ -38,6 +38,22 @@ func annotate(annotations map[string]string, appended map[string]string) map[str
 	return annotations
 }
 
+// AppendToIndex annotates only the index itself (not its child manifests).
+func AppendToIndex(ctx context.Context, cs content.Store, desc *ocispec.Descriptor, appended map[string]string) (*ocispec.Descriptor, error) {
+	if appended == nil {
+		return desc, nil
+	}
+
+	var index ocispec.Index
+	labels, err := utils.ReadJSON(ctx, cs, &index, *desc)
+	if err != nil {
+		return nil, errors.Wrap(err, "read manifest index")
+	}
+
+	index.Annotations = annotate(index.Annotations, appended)
+	return utils.WriteJSON(ctx, cs, index, *desc, "", labels)
+}
+
 func Append(ctx context.Context, cs content.Store, desc *ocispec.Descriptor, appended map[string]string) (*ocispec.Descriptor, error) {
 	if appended == nil {
 		return desc, nil

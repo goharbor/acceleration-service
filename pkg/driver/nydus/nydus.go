@@ -250,7 +250,7 @@ func (d *Driver) Convert(ctx context.Context, provider accelcontent.Provider, so
 		return nil, err
 	}
 	if d.mergeManifest {
-		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc)
+		return d.makeManifestIndex(ctx, provider.ContentStore(), *image, *desc, sourceRef)
 	}
 	return desc, err
 }
@@ -345,10 +345,30 @@ func (d *Driver) convert(ctx context.Context, provider accelcontent.Provider, so
 		convertHooks,
 	)
 
-	return indexConvertFunc(ctx, cs, source)
+	desc, err := indexConvertFunc(ctx, cs, source)
+	if err != nil {
+		return nil, err
+	}
+
+	if images.IsIndexType(desc.MediaType) {
+		indexAnnotations := map[string]string{
+			annotationSourceDigest:    string(source.Digest),
+			annotationSourceReference: sourceRef,
+			annotationFsVersion:       d.fsVersion,
+		}
+		if version := detectBuilderVersion(ctx, d.builderPath); version != "" {
+			indexAnnotations[annotationBuilderVersion] = version
+		}
+		desc, err = annotation.AppendToIndex(ctx, cs, desc, indexAnnotations)
+		if err != nil {
+			return nil, errors.Wrap(err, "append index annotations")
+		}
+	}
+
+	return desc, nil
 }
 
-func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, nydus ocispec.Descriptor) (*ocispec.Descriptor, error) {
+func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, nydus ocispec.Descriptor, sourceRef string) (*ocispec.Descriptor, error) {
 	ociDescs, err := utils.GetManifests(ctx, cs, oci, d.platformMC)
 	if err != nil {
 		return nil, errors.Wrap(err, "get oci image manifest list")
@@ -381,11 +401,21 @@ func (d *Driver) makeManifestIndex(ctx context.Context, cs content.Store, oci, n
 
 	descs := append(ociDescs, nydusDescs...)
 
+	indexAnnotations := map[string]string{
+		annotationSourceDigest:    string(oci.Digest),
+		annotationSourceReference: sourceRef,
+		annotationFsVersion:       d.fsVersion,
+	}
+	if version := detectBuilderVersion(ctx, d.builderPath); version != "" {
+		indexAnnotations[annotationBuilderVersion] = version
+	}
+
 	index := ocispec.Index{
 		Versioned: specs.Versioned{
 			SchemaVersion: 2,
 		},
-		Manifests: descs,
+		Annotations: indexAnnotations,
+		Manifests:   descs,
 	}
 
 	indexDesc, indexBytes, err := nydusutils.MarshalToDesc(index, ocispec.MediaTypeImageIndex)

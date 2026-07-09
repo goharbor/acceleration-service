@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/plugins/content/local"
+	"github.com/containerd/platforms"
 	nydusutils "github.com/goharbor/acceleration-service/pkg/driver/nydus/utils"
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go"
@@ -373,6 +375,73 @@ func verifyPrependResults(ctx context.Context, t *testing.T, cs content.Store, o
 	emptyHistory := newConfig.History[0]
 	assert.Equal(t, "Nydus Converter", emptyHistory.CreatedBy, "empty layer should be created by Nydus Converter")
 	assert.Equal(t, "Nydus Empty Layer", emptyHistory.Comment, "empty layer comment should be correct")
+}
+
+func createIndexBlob(ctx context.Context, cs content.Store, manifests []ocispec.Descriptor) (*ocispec.Descriptor, error) {
+	index := ocispec.Index{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		MediaType: ocispec.MediaTypeImageIndex,
+		Manifests: manifests,
+	}
+
+	indexDesc, indexBytes, err := nydusutils.MarshalToDesc(index, ocispec.MediaTypeImageIndex)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal index")
+	}
+
+	labels := map[string]string{}
+	for i, desc := range manifests {
+		labels[fmt.Sprintf("containerd.io/gc.ref.content.%d", i)] = desc.Digest.String()
+	}
+	if err := content.WriteBlob(ctx, cs, indexDesc.Digest.String(), bytes.NewReader(indexBytes), *indexDesc, content.WithLabels(labels)); err != nil {
+		return nil, errors.Wrap(err, "write index blob")
+	}
+	return indexDesc, nil
+}
+
+func Test_makeManifestIndexAnnotations(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	cs, err := local.NewStore(tempDir)
+	require.NoError(t, err)
+
+	// Build a minimal OCI manifest to act as the source
+	config := ocispec.Image{
+		RootFS:  ocispec.RootFS{Type: "layers", DiffIDs: []digest.Digest{}},
+		History: []ocispec.History{},
+	}
+	configDesc, err := createConfigBlob(ctx, cs, ocispec.MediaTypeImageConfig, config)
+	require.NoError(t, err)
+
+	manifestDesc, err := createManifestBlob(ctx, cs, ocispec.MediaTypeImageManifest, []ocispec.Descriptor{}, *configDesc)
+	require.NoError(t, err)
+	manifestDesc.Platform = &ocispec.Platform{OS: "linux", Architecture: "amd64"}
+
+	// Build the source OCI index and a nydus index (same manifests for simplicity)
+	ociIndexDesc, err := createIndexBlob(ctx, cs, []ocispec.Descriptor{*manifestDesc})
+	require.NoError(t, err)
+
+	nydusIndexDesc, err := createIndexBlob(ctx, cs, []ocispec.Descriptor{*manifestDesc})
+	require.NoError(t, err)
+
+	d := &Driver{
+		fsVersion:  "6",
+		platformMC: platforms.All,
+	}
+
+	const sourceRef = "registry.example.com/test/image:v1"
+	resultDesc, err := d.makeManifestIndex(ctx, cs, *ociIndexDesc, *nydusIndexDesc, sourceRef)
+	require.NoError(t, err)
+
+	indexBytes, err := content.ReadBlob(ctx, cs, *resultDesc)
+	require.NoError(t, err)
+
+	var idx ocispec.Index
+	require.NoError(t, json.Unmarshal(indexBytes, &idx))
+
+	assert.Equal(t, ociIndexDesc.Digest.String(), idx.Annotations[annotationSourceDigest], "index should have source digest annotation")
+	assert.Equal(t, sourceRef, idx.Annotations[annotationSourceReference], "index should have source reference annotation")
+	assert.Equal(t, "6", idx.Annotations[annotationFsVersion], "index should have fs version annotation")
 }
 
 func Test_generateDockerEmptyLayer(t *testing.T) {
