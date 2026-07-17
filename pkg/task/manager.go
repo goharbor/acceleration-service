@@ -189,6 +189,13 @@ func (m *manager) Finish(id string, metric *converter.Metric, err error) error {
 	return nil
 }
 
+func (m *manager) Get(id string) *Task {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	return m.tasks[id]
+}
+
 func (m *manager) List() []*Task {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()

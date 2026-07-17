@@ -21,6 +21,17 @@ package model
 
 const TopicPushArtifact = "PUSH_ARTIFACT"
 
+// ConversionTask represents a single conversion task created from a POST request.
+type ConversionTask struct {
+	TaskID      string `json:"task_id"`
+	ResourceURL string `json:"resource_url"`
+}
+
+// CreateTaskResponse is the response body for POST /api/v1/conversions.
+type CreateTaskResponse struct {
+	Tasks []ConversionTask `json:"tasks"`
+}
+
 // Payload of notification event
 type Payload struct {
 	Type      string     `json:"type"`

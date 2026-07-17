@@ -84,7 +84,8 @@ func main() {
 								logrus.Info("Waiting task to be completed...")
 							}
 
-							if err := ctl.CreateTask(source, sync); err != nil {
+							resp, err := ctl.CreateTask(source, sync)
+							if err != nil {
 								return err
 							}
 
@@ -92,6 +93,9 @@ func main() {
 								logrus.Info("Task has been completed.")
 							} else {
 								logrus.Info("Submitted asynchronous task, check status by `task list`.")
+							}
+							for _, t := range resp.Tasks {
+								logrus.Infof("Task ID: %s, Resource: %s", t.TaskID, t.ResourceURL)
 							}
 
 							return nil
@@ -145,7 +149,8 @@ func main() {
 						return err
 					}
 
-					return handler.Convert(c.Context, source, true)
+					_, err = handler.Convert(c.Context, source, true)
+					return err
 				},
 			},
 		},

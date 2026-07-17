@@ -65,14 +65,23 @@ func (r *LocalRouter) CreateTask(ctx echo.Context) error {
 		}
 	}
 
+	resp := model.CreateTaskResponse{
+		Tasks: make([]model.ConversionTask, 0, len(payload.EventData.Resources)),
+	}
+
 	for _, res := range payload.EventData.Resources {
-		if err := r.handler.Convert(ctx.Request().Context(), res.ResourceURL, sync); err != nil {
+		taskID, err := r.handler.Convert(ctx.Request().Context(), res.ResourceURL, sync)
+		if err != nil {
 			return util.ReplyError(
 				ctx, http.StatusInternalServerError, errdefs.ErrConvertFailed,
 				err.Error(),
 			)
 		}
+		resp.Tasks = append(resp.Tasks, model.ConversionTask{
+			TaskID:      taskID,
+			ResourceURL: res.ResourceURL,
+		})
 	}
 
-	return ctx.JSON(http.StatusOK, "Ok")
+	return ctx.JSON(http.StatusOK, resp)
 }

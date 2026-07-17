@@ -40,7 +40,7 @@ type Adapter interface {
 	// by specifying source image reference, the conversion is
 	// asynchronous, and if the sync option is specified,
 	// Dispatch will be blocked until the conversion is complete.
-	Dispatch(ctx context.Context, ref string, sync bool) error
+	Dispatch(ctx context.Context, ref string, sync bool) (string, error)
 	// CheckHealth checks the containerd client can successfully
 	// connect to the containerd daemon and the healthcheck service
 	// returns the SERVING response.
@@ -141,10 +141,10 @@ func (adp *LocalAdapter) Convert(ctx context.Context, source string) (*converter
 	return metric, nil
 }
 
-func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) error {
+func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) (string, error) {
 	taskID, err := task.Manager.Create(ref)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if sync {
 		// FIXME: The synchronous conversion task should also be
@@ -154,7 +154,7 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 			task.Manager.Finish(taskID, metric, err)
 			return nil, err
 		}, "convert")
-		return err
+		return taskID, err
 	}
 
 	adp.worker.Dispatch(func() error {
@@ -170,7 +170,7 @@ func (adp *LocalAdapter) Dispatch(ctx context.Context, ref string, sync bool) er
 		return err
 	})
 
-	return nil
+	return taskID, nil
 }
 
 func (adp *LocalAdapter) CheckHealth(_ context.Context) error {

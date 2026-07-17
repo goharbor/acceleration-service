@@ -7,6 +7,7 @@ from Harbor for image conversions, acceld exposes following APIs:
 
 - [Create Task](#create-task)
 - [List Task](#list-task)
+- [Get Task](#get-task)
 - [Check Healthy](#check-healthy)
 
 ---
@@ -35,9 +36,20 @@ POST /api/v1/conversions?sync=$sync
 
 #### Response
 
+```json
+{
+    "tasks": [
+        {
+            "task_id": "5bdf7e80-1f1e-461f-a50d-f41d27434662",
+            "resource_url": "192.168.1.1/library/nginx:latest"
+        }
+    ]
+}
 ```
-Ok
-```
+
+`task_id`: string, unique identifier for the created conversion task. Can be used with [Get Task](#get-task) to track progress.
+
+`resource_url`: string, the source image reference associated with the task.
 
 | Status | Description                                  |
 | ------ | -------------------------------------------- |
@@ -83,6 +95,42 @@ GET /api/v1/conversions
 | ------ | -------------------------------------------- |
 | 200    | Return task list                             |
 | 401    | Unauthorized, invalid `Authorization` header |
+
+<a name="get-task"></a>
+
+### Get Task
+
+#### Request
+
+```
+GET /api/v1/conversions/:id
+```
+
+`id`: string, the task identifier returned by [Create Task](#create-task).
+
+#### Response
+
+```json
+{
+    "id": "5bdf7e80-1f1e-461f-a50d-f41d27434662",
+    "created": "2022-04-06T06:45:11.83226503Z",
+    "finished": "2022-04-06T06:45:11.948393604Z",
+    "source": "192.168.1.1/library/nginx:latest",
+    "source_size": "70254592",
+    "target_size": "72351744",
+    "status": "$status",
+    "reason": "$reason"
+}
+```
+
+`$status`: string, possible values is `PROCESSING`, `COMPLETED`, `FAILED`.
+
+`$reason`: string, giving failed reason message when the status is `FAILED`.
+
+| Status | Description                                  |
+| ------ | -------------------------------------------- |
+| 200    | Return task                                  |
+| 404    | Task not found                               |
 
 <a name="check-healthy"></a>
 

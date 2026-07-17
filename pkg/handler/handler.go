@@ -36,7 +36,7 @@ type Handler interface {
 	// source image reference, the conversion is asynchronous, and
 	// if the sync option is specified, the HTTP request will be
 	// blocked until the conversion is complete.
-	Convert(ctx context.Context, ref string, sync bool) error
+	Convert(ctx context.Context, ref string, sync bool) (string, error)
 	// CheckHealth checks the acceld service is healthy and can serve
 	// webhook request.
 	CheckHealth(ctx context.Context) error
@@ -71,7 +71,7 @@ func (handler *LocalHandler) Auth(_ context.Context, host string, authHeader str
 	return nil
 }
 
-func (handler *LocalHandler) Convert(ctx context.Context, ref string, sync bool) error {
+func (handler *LocalHandler) Convert(ctx context.Context, ref string, sync bool) (string, error) {
 	return handler.adp.Dispatch(ctx, ref, sync)
 }
 
