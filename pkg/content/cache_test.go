@@ -15,9 +15,12 @@
 package content
 
 import (
+	"context"
 	"os"
 	"testing"
 
+	"github.com/containerd/containerd/v2/core/leases"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
@@ -59,4 +62,34 @@ func TestLeaseCacheInit(t *testing.T) {
 	}
 	lc := newLeaseCache()
 	require.NoError(t, lc.Init(content.lm))
+}
+
+func TestCleanLeasesWhenLeaseCacheIsExhausted(t *testing.T) {
+	os.MkdirAll("./tmp-clean", 0755)
+	defer os.RemoveAll("./tmp-clean")
+	content, err := NewContent(nil, "./tmp-clean", "./tmp-clean", "100MB")
+	require.NoError(t, err)
+
+	ctx := namespaces.WithNamespace(context.Background(), accelerationServiceNamespace)
+	dgst := "sha256:9bb13890319dc01e5f8a4d3d0c4c72685654d682d568350fd38a02b1d70aee6b"
+	_, err = content.lm.Create(ctx, leases.WithID(dgst))
+	require.NoError(t, err)
+
+	// a digest reaching Add twice on the same used count leaves Len() above the
+	// number of keys actually held, so the guard in cleanLeases does not hold
+	require.NoError(t, content.lc.Add(dgst, "1"))
+	require.NoError(t, content.lc.Add(dgst, "1"))
+
+	require.Error(t, content.cleanLeases(ctx, 1))
+}
+
+func TestLeaseCacheLenCountsEachKeyOnce(t *testing.T) {
+	lc := newLeaseCache()
+	require.NoError(t, lc.Add("test_1", "1"))
+	require.NoError(t, lc.Add("test_1", "1"))
+	require.Equal(t, 1, lc.Len())
+
+	_, err := lc.Remove()
+	require.NoError(t, err)
+	require.Equal(t, 0, lc.Len())
 }

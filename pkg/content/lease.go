@@ -65,7 +65,11 @@ func (leaseCache *leaseCache) Add(key string, usedCount string) error {
 	if err != nil {
 		return err
 	}
+	// a key the bucket already holds must not be counted a second time, or Len
+	// stays above the number of keys and Remove is called with nothing left
+	alreadyCached := false
 	if cache, ok := leaseCache.caches[usedCount]; ok {
+		alreadyCached = cache.Contains(key)
 		cache.Add(key, nil)
 	} else {
 		cache, err := lru.New[string, any](math.MaxInt)
@@ -90,14 +94,24 @@ func (leaseCache *leaseCache) Add(key string, usedCount string) error {
 			}
 		}
 	}
-	leaseCache.size++
+	if !alreadyCached {
+		leaseCache.size++
+	}
 	return nil
 }
 
 // Remove oldest key from cache
 func (leaseCache *leaseCache) Remove() (string, error) {
-	if key, _, ok := leaseCache.caches[strconv.Itoa(leaseCache.cachesIndex[0])].GetOldest(); ok {
-		leaseCache.remove(key, strconv.Itoa(leaseCache.cachesIndex[0]))
+	if len(leaseCache.cachesIndex) == 0 {
+		return "", fmt.Errorf("leaseCache have no cache in cachesIndex")
+	}
+	usedCount := strconv.Itoa(leaseCache.cachesIndex[0])
+	cache, ok := leaseCache.caches[usedCount]
+	if !ok {
+		return "", fmt.Errorf("leaseCache have no cache for used count %s", usedCount)
+	}
+	if key, _, ok := cache.GetOldest(); ok {
+		leaseCache.remove(key, usedCount)
 		leaseCache.size--
 		return key, nil
 	}
